@@ -224,12 +224,12 @@ class Rename_GP_TimeLapse:
             second = str(self.finishTime.second)
 
         if len(str(self.timeStep)) < 2:
-            timeStep = s.join(['0',str(self.timeStep)])
+            self.timeStep = s.join(['0',str(self.timeStep)])
 
         else:
             day = str(self.finishTime.day)
 
-        fileName = s.join([year,month,day,'_',hour,minute,second,'_',timeStep,'.mp4'])
+        fileName = s.join([year,month,day,'_',hour,minute,second,'_',str(self.timeStep),'.mp4'])
         directory = os.path.dirname(self.file)
         fileName = os.path.join(directory,fileName)
         os.rename(self.file,fileName)
