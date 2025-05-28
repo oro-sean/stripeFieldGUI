@@ -161,7 +161,7 @@ class   Make_Project_Directory_Window(tk.Toplevel):
             logging.error(e)
             logging.error('Failed to set project root directory in make project directory')
 
-class Import_Frame_Header(tk.Frame):
+class   Import_Frame_Header(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
         self.column_min_width = 160
@@ -238,7 +238,7 @@ class Import_Frame_Header(tk.Frame):
         self.log_check_bool.set(self.Proj_Window.log_check_bool.get())
         self.event_check_bool.set(self.Proj_Window.event_check_bool.get())
 
-class Import_Frame_Source(tk.Frame):
+class   Import_Frame_Source(tk.Frame):
     def __init__(self, master, check_bool_pre, source_name, source_type):
         super().__init__(master)
         ## define grid column width
@@ -611,7 +611,6 @@ class   Data_Cleaning_Top(tk.Frame):
         self.tws_var_combobox.grid(row=4, column=5, padx=5, pady=5)
         self.raceTimer_var_combobox.grid(row=5, column=5, padx=5, pady=5)
 
-        self.bind('<Button-1>',self.Update_From_Import)
 
     def Update_From_Import(self,*args):
         self.log_path_stringVar.set(app.mainframe.import_frame.log_path_final_stringVar.get())
@@ -637,46 +636,53 @@ class   Data_Cleaning_Top(tk.Frame):
     def On_Load_Log(self):
         if self.log_type_stringVar.get() == "Expedition":
             try:
-                print('here')
                 exp_log = veeringLogs.VeeringLog(self.log_path_stringVar.get())
                 exp_log.Expedition_To_DF()
                 exp_log.Add_Time_Zone(int(self.log_timezone_stringVar.get()))
                 exp_log.Add_Time_Stamp()
+                self.exp_log = exp_log
 
                 for header in exp_log.log_df.columns:
-                    print(header)
                     self.logVars_listbox.insert(tk.END, header)
 
             except Exception as e:
                 logging.error(e)
                 logging.error('Failed to load log')
 
-
     def On_Export_Log(self):
-        print("Log File Exported")
+        filterVars = []
+        try:
+            for selection in self.logVars_listbox.curselection():
+                filterVars.append(self.logVars_listbox.get(selection))
+            self.exp_log.Select_Variables(filterVars)
+
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to select variables')
 
     def On_Add_Aggregation(self):
         print("Aggregation Added")
 
-class   Data_Cleaning_Mid:
-    def __init__(self, master):
-        self.master = master
-        self.frame = tk.Frame(self.master)
-        self.frame['borderwidth'] = 1
-        self.frame['relief'] = 'ridge'
-
+class   Data_Cleaning_Mid(tk.Frame):
+    def __init__(self, master, width, height):
+        super().__init__(master)
+        self['borderwidth'] = 1
+        self['relief'] = 'ridge'
+        self.config(width=width, height=height)
 
         ## define buttons
-        self.load_event_button = tk.Button(self.frame, width=10, text="Load Event File", font='none 12 bold', command=self.On_Load_Event)
-        self.export_event_button = tk.Button(self.frame, width=10, text="Export Event File", font='none 12 bold', command=self.On_Export_Event)
-        self.add_event_button = tk.Button(self.frame, width=8, text="Add Event", font='none 12 bold', command=self.On_Add_Event)
-        self.remove_event_button = tk.Button(self.frame, width=8, text="Remove Event", font='none 12 bold', command=self.On_Remove_Event)
-        self.commit_event_change_button = tk.Button(self.frame, width=8, text="Commit Change", font='none 12 bold', command=self.On_Commit_Event_Change)
-        self.add_attributes_button = tk.Button(self.frame, width=8, text="Add attributes", font='none 12 bold', command=self.On_Add_Attributes)
+        self.load_event_button = tk.Button(self, width=10, text="Load Event File", font='none 12 bold', command=self.On_Load_Event)
+        self.export_event_button = tk.Button(self, width=10, text="Export Event File", font='none 12 bold', command=self.On_Export_Event)
+        self.add_event_button = tk.Button(self, width=8, text="Add Event", font='none 12 bold', command=self.On_Add_Event)
+        self.remove_event_button = tk.Button(self, width=8, text="Remove Event", font='none 12 bold', command=self.On_Remove_Event)
+        self.commit_event_change_button = tk.Button(self, width=8, text="Commit Change", font='none 12 bold', command=self.On_Commit_Event_Change)
+        self.add_attributes_button = tk.Button(self, width=8, text="Add attributes", font='none 12 bold', command=self.On_Add_Attributes)
 
         ## define stringVars
-        self.event_path = tk.StringVar()
-        self.event_path.set("Event File Not Selected")
+        self.event_path_stringVar = tk.StringVar()
+        self.event_path_stringVar.set("Event File Not Selected")
+        self.event_type_stringVar = tk.StringVar()
+        self.event_timezone_stringVar = tk.StringVar()
         self.selected_type = tk.StringVar()
         self.selected_type.set("NA - Type")
         self.selected_time = tk.StringVar()
@@ -692,49 +698,58 @@ class   Data_Cleaning_Mid:
         self.preserve_phases_bool = tk.BooleanVar()
 
         ## define Label
-        self.add_modify_delete_label = tk.Label(self.frame, text="Add, Modify or Delete Events", font='none 12 bold')
-        self.event_path_label = tk.Label(self.frame, textvariable=self.event_path, font='none 12 bold')
-        self.event_type_label = tk.Label(self.frame, text="Event Type", font='none 12 bold')
-        self.event_time_label = tk.Label(self.frame, text="Event Time", font='none 12 bold')
-        self.event_list_label = tk.Label(self.frame, text="Event List", font='none 12 bold')
-        self.selected_type_label = tk.Label(self.frame, textvariable=self.selected_type, font='none 12 bold')
-        self.selected_time_label = tk.Label(self.frame, textvariable=self.selected_time, font='none 12 bold')
-        self.selected_attribute_label = tk.Label(self.frame, textvariable=self.selected_attribute, font='none 12 bold')
-        self.modified_time_label = tk.Label(self.frame, textvariable=self.modified_time, font='none 12 bold')
-        self.new_attribute_label = tk.Label(self.frame, text="New Attribute", font='none 12 bold')
-        self.new_type_label = tk.Label(self.frame, text="New Type", font='none 12 bold')
-        self.time_modify_label = tk.Label(self.frame, text="Time Change", font='none 12 bold')
+        self.add_modify_delete_label = tk.Label(self, text="Add, Modify or Delete Events", font='none 12 bold')
+        self.event_path_label = tk.Label(self, textvariable=self.event_path_stringVar, font='none 12 bold')
+        self.event_file_type = tk.Label(self, textvariable=self.event_type_stringVar, font='none 12 bold')
+        self.event_type_all_label = tk.Label(self, text="All Event Types", font='none 12 bold')
+        self.event_type_filter_label = tk.Label(self, text="Filter Event Types", font='none 12 bold')
+        self.event_list_label = tk.Label(self, text="Event List", font='none 12 bold')
+        self.event_type_annotation_label = tk.Label(self, text="Event Type Annotation", font='none 12 bold')
+        self.selected_type_label = tk.Label(self, textvariable=self.selected_type, font='none 12 bold')
+        self.selected_time_label = tk.Label(self, textvariable=self.selected_time, font='none 12 bold')
+        self.selected_attribute_label = tk.Label(self, textvariable=self.selected_attribute, font='none 12 bold')
+        self.modified_time_label = tk.Label(self, textvariable=self.modified_time, font='none 12 bold')
+        self.new_attribute_label = tk.Label(self, text="New Attribute", font='none 12 bold')
+        self.new_type_label = tk.Label(self, text="New Type", font='none 12 bold')
+        self.time_modify_label = tk.Label(self, text="Time Change", font='none 12 bold')
 
         self.event_path_label.configure(wraplength=150)
 
         ## define list boxes
-        self.event_type_listbox = tk.Listbox(self.frame, height=12, width=22,  font='none 12 bold')
-        self.event_time_listbox = tk.Listbox(self.frame, height=12, width=22, font='none 12 bold')
-        self.event_list_listbox = tk.Listbox(self.frame, height=12, width=22, font='none 12 bold')
+        self.event_type_all_listbox = tk.Listbox(self, height=12, width=22,  font='none 12', selectmode=tk.MULTIPLE, exportselection=False)
+        self.event_type_filter_listbox = tk.Listbox(self, height=12, width=22, font='none 12', selectmode=tk.MULTIPLE, exportselection=False)
+        self.event_list_listbox = tk.Listbox(self, height=12, width=22, font='none 12', selectmode=tk.MULTIPLE, exportselection=False)
+        self.event_type_annotation_listbox = tk.Listbox(self, height=12, width=22, font='none 12', selectmode=tk.MULTIPLE, exportselection=False)
 
         ## define combobox
-        self.event_type_combobox = ttk.Combobox(self.frame, width=12, font='none 12 bold')
-        self.new_attribute_combobox = ttk.Combobox(self.frame, width=12, font='none 12 bold')
-        self.time_sign_combobox = ttk.Combobox(self.frame, width=5, font='none 12 bold')
-        self.time_hour_combobox = ttk.Combobox(self.frame, width=5, font='none 12 bold')
-        self.time_min_combobox = ttk.Combobox(self.frame, width=5, font='none 12 bold')
-        self.time_second_combobox = ttk.Combobox(self.frame, width=5, font='none 12 bold')
+        self.event_type_combobox = ttk.Combobox(self, width=12, font='none 12 bold')
+        self.new_attribute_combobox = ttk.Combobox(self, width=12, font='none 12 bold')
+        self.time_sign_combobox = ttk.Combobox(self, width=5, font='none 12 bold')
+        self.time_hour_combobox = ttk.Combobox(self, width=5, font='none 12 bold')
+        self.time_min_combobox = ttk.Combobox(self, width=5, font='none 12 bold')
+        self.time_second_combobox = ttk.Combobox(self, width=5, font='none 12 bold')
 
         ## define checkbutton
-        self.preserve_phases_checkbutton = tk.Checkbutton(self.frame, text= "Preserve Phases for Filter", variable=self.preserve_phases_bool, onvalue=True, offvalue=False, command=self.On_Preserve_Phase)
+        self.preserve_phases_checkbutton = tk.Checkbutton(self, text= "Preserve Phases for Filter", variable=self.preserve_phases_bool, onvalue=True, offvalue=False, command=self.On_Preserve_Phase)
 
         ## grid
+        self.Grid_Elements()
+        self.event_type_all_listbox.bind('<<ListboxSelect>>', self.Update_List_Box_1)
+        self.event_type_filter_listbox.bind('<<ListboxSelect>>', self.Update_List_Box_2)
+
+    def Grid_Elements(self):
         self.load_event_button.grid(row=0, column=0, padx=5, pady=5)
         self.event_path_label.grid(row=0, column=1, padx=5, pady=5)
-        self.export_event_button.grid(row=0, column=2, padx=5, pady=5)
+        self.event_file_type.grid(row=0, column=2, padx=5, pady=5)
         self.preserve_phases_checkbutton.grid(row=0, column=3, padx=5, pady=5)
+        self.export_event_button.grid(row=1, column=3, padx=5, pady=5)
 
 
-        self.event_type_label.grid(row=1, column=0, padx=5, pady=5)
-        self.event_type_listbox.grid(row=2, column=0, padx=5, pady=5, rowspan=5)
+        self.event_type_all_label.grid(row=1, column=0, padx=5, pady=5)
+        self.event_type_all_listbox.grid(row=2, column=0, padx=5, pady=5, rowspan=5)
 
-        self.event_time_label.grid(row=1, column=1, padx=5, pady=5)
-        self.event_time_listbox.grid(row=2, column=1, padx=5, pady=5, rowspan=5)
+        self.event_type_filter_label.grid(row=1, column=1, padx=5, pady=5)
+        self.event_type_filter_listbox.grid(row=2, column=1, padx=5, pady=5, rowspan=5)
 
         self.event_list_label.grid(row=1, column=2, padx=5, pady=5)
         self.event_list_listbox.grid(row=2, column=2, padx=5, pady=5, rowspan=5)
@@ -760,15 +775,68 @@ class   Data_Cleaning_Mid:
         self.commit_event_change_button.grid(row=4, column=7, padx=5, pady=5)
         self.add_attributes_button.grid(row=5, column=7, padx=5, pady=5)
 
+        self.event_type_annotation_label.grid(row=1, column=8, padx=5, pady=5)
+        self.event_type_annotation_listbox.grid(row=2, column=8, padx=5, pady=5, rowspan=5)
+
     ## define class functions
+
+    def Update_From_Import(self,*args):
+        self.event_path_stringVar.set(app.mainframe.import_frame.event_path_final_stringVar.get())
+        self.event_type_stringVar.set(app.mainframe.import_frame.event.log_type.get())
+        self.event_timezone_stringVar.set(app.mainframe.import_frame.event.timezone.get())
+
     def On_Preserve_Phase(self):
         print('On_Preserve_Phase')
 
     def On_Load_Event(self):
-        print("Event File Loaded")
+        if self.event_type_stringVar.get() == 'XML':
+            try:
+                self.eventFile = veeringLogs.VeeringEvent(self.event_path_stringVar.get())
+                self.eventFile.Load_XML()
+                self.eventFile.Add_Time_Zone(self.event_timezone_stringVar.get())
+                self.eventFile.Build_Event_Dict()
+                self.eventFile.Build_Phase_Dict()
+
+                self.phase_dict = self.eventFile.phases
+                self.event_dict = self.eventFile.events
+
+                event_typ_unique = []
+                for key in self.event_dict.keys():
+                    if self.event_dict[key][1] not in event_typ_unique:
+                        event_typ_unique.append(self.event_dict[key][1])
+
+                for type in event_typ_unique:
+                    self.event_type_all_listbox.insert(tk.END, type)
+
+            except Exception as e:
+                logging.error(e)
+                logging.error('Failed to load event')
+
+    def Update_List_Box_1(self,*args):
+        self.event_type_filter_listbox.delete(0, tk.END)
+        for i in self.event_type_all_listbox.curselection():
+            self.event_type_filter_listbox.insert(tk.END, self.event_type_all_listbox.get(i))
+
+    def Update_List_Box_2(self,*args):
+        self.event_list_listbox.delete(0, tk.END)
+        self.event_type_annotation_listbox.delete(0, tk.END)
+        type = []
+        for i in self.event_type_filter_listbox.curselection():
+            self.event_type_annotation_listbox.insert(tk.END, self.event_type_filter_listbox.get(i))
+            type.append(self.event_type_filter_listbox.get(i))
+        print(type)
+        for key in self.event_dict.keys():
+            if self.event_dict[key][1] in type:
+                self.event_list_listbox.insert(tk.END, str(self.event_dict[key][0])+" - "+str(self.event_dict[key][1])+" - "+str(self.event_dict[key][2]))
 
     def On_Export_Event(self):
-        print("Event File Exported")
+        if self.preserve_phases_bool:
+            try:
+                self.eventFile.build_Phase_DF()
+
+            except Exception as e:
+                logging.error(e)
+                logging.error('Failed to build phase DF')
 
     def On_Add_Event(self):
         print("Event File Added")
@@ -796,7 +864,7 @@ class   Data_Cleaning_Side:
         self.race_timer_label = tk.Label(self.frame, text="Race Timer = 0", font='none 12 bold')
 
         ## define list box
-        self.race_timer_listbox = tk.Listbox(self.frame, height=25, width=22, font='none 12 bold')
+        self.race_timer_listbox = tk.Listbox(self.frame, height=10, width=22, font='none 12 bold')
 
         ## grid
         self.race_timer_label.grid(row=0, column=0, padx=5, pady=5, columnspan=3)
@@ -812,21 +880,223 @@ class   Data_Cleaning_Frame(tk.Frame):
         super().__init__(master)
 
         self.Make_Data_Cleaning_Frame()
+
     def Make_Data_Cleaning_Frame(self):
         self.topFrame = Data_Cleaning_Top(self,1000,400)
-        self.midFrame = Data_Cleaning_Mid(self)
+        self.midFrame = Data_Cleaning_Mid(self,1000,400)
         self.sideFrame = Data_Cleaning_Side(self)
-        self.topFrame.config(width=1000, height=400)
-        self.midFrame.frame.config(width=1000, height=400)
-        self.sideFrame.frame.config(width=100, height=700)
 
-        self.topFrame.grid(row=0, column=0, padx=10, pady=10, rowspan=10, columnspan=10)
-        self.midFrame.frame.grid(row=10, column=0, padx=10, pady=10, rowspan=10, columnspan=10)
-        self.sideFrame.frame.grid(row=1, column=11, padx=10, pady=10, rowspan=15, columnspan=5)
+        self.sideFrame.frame.config(width=100, height=700)
+        self.topFrame.grid(row=0, column=0, padx=10, pady=10, rowspan=10, columnspan=6)
+        self.midFrame.grid(row=10, column=0, padx=10, pady=10, rowspan=10, columnspan=8)
+        self.sideFrame.frame.grid(row=0, column=7, padx=10, pady=10, rowspan=10, columnspan=5)
+
+class   Filter_Range_Selector(tk.Frame):
+    def __init__(self, master, variable_name,df_var):
+        super().__init__(master)
+        self.df_var = df_var
+        self.variable_name = variable_name
+        ## define Bools
+        self.use_filter_bool = tk.BooleanVar()
+        self.use_filter_bool.set(False)
+
+        ## define stingVars
+        self.range_count_stringVar = tk.StringVar()
+        self.range_count_stringVar.set('1')
+        self.port_min_1_stringVar = tk.StringVar()
+        self.port_max_1_stringVar = tk.StringVar()
+        self.port_min_2_stringVar = tk.StringVar()
+        self.port_max_2_stringVar = tk.StringVar()
+        self.port_min_3_stringVar = tk.StringVar()
+        self.port_max_3_stringVar = tk.StringVar()
+        self.port_min_4_stringVar = tk.StringVar()
+        self.port_max_4_stringVar = tk.StringVar()
+        self.stb_min_1_stringVar = tk.StringVar()
+        self.stb_max_1_stringVar = tk.StringVar()
+        self.stb_min_2_stringVar = tk.StringVar()
+        self.stb_max_2_stringVar = tk.StringVar()
+        self.stb_min_3_stringVar = tk.StringVar()
+        self.stb_max_3_stringVar = tk.StringVar()
+        self.stb_min_4_stringVar = tk.StringVar()
+        self.stb_max_4_stringVar = tk.StringVar()
+        self.df_var_label = tk.StringVar()
+        self.check_1 = tk.StringVar()
+        self.check_2 = tk.StringVar()
+        self.check_3 = tk.StringVar()
+        self.check_4 = tk.StringVar()
+        self.portMin = [self.port_min_1_stringVar, self.port_min_2_stringVar, self.port_min_3_stringVar, self.port_min_4_stringVar]
+        self.portMax = [self.port_max_1_stringVar, self.port_max_2_stringVar, self.port_max_3_stringVar, self.port_max_4_stringVar]
+        self.stbMin = [self.stb_min_1_stringVar, self.stb_min_2_stringVar, self.stb_min_3_stringVar, self.stb_min_4_stringVar]
+        self.stbMax = [self.stb_max_1_stringVar, self.stb_max_2_stringVar, self.stb_max_3_stringVar, self.stb_max_4_stringVar]
+        self.checks = [self.check_1, self.check_2, self.check_3, self.check_4]
+
+        ## define check boxes
+        self.use_filter_checkbox = tk.Checkbutton(self, text="Use "+str(self.variable_name)+" Filter", variable=self.use_filter_bool, onvalue=True, offvalue=False, command=self.Update_Filter)
+
+        ## define combo boxes
+        self.range_count_combo = ttk.Combobox(self, textvariable=self.range_count_stringVar, width=6)
+        self.range_count_combo['values'] = ('1', '2', '3', '4')
+
+        ## bind events
+        self.range_count_combo.bind('<<ComboboxSelected>>', self.Update_Filter)
+
+        ## define Labels
+        self.port_label = tk.Label(self, text="Port", font='none 12 bold')
+        self.stb_label = tk.Label(self, text="Starboard", font='none 12 bold')
+        self.min_label_1 = tk.Label(self, text="Min", font='none 12 bold')
+        self.max_label_1 = tk.Label(self, text="Max", font='none 12 bold')
+        self.min_label_2 = tk.Label(self, text="Min", font='none 12 bold')
+        self.max_label_2 = tk.Label(self, text="Max", font='none 12 bold')
+        self.combo_label = tk.Label(self, text="# of Ranges", font='none 12 bold')
+        self.check_1_label = tk.Label(self, textvariable=self.check_1, font='none 12 bold')
+        self.check_2_label = tk.Label(self, textvariable=self.check_2, font='none 12 bold')
+        self.check_3_label = tk.Label(self, textvariable=self.check_3, font='none 12 bold')
+        self.check_4_label = tk.Label(self, textvariable=self.check_4, font='none 12 bold')
+        self.checks_label = [self.check_1_label, self.check_2_label, self.check_3_label, self.check_4_label]
+
+        self.use_filter_checkbox.grid(row=0, column=0, padx=5, pady=5, columnspan=3)
+        self.range_count_combo.grid(row=1, column=0, padx=5, pady=5, columnspan=1)
+        self.combo_label.grid(row=1, column=1, padx=5, pady=5, columnspan=2)
+        self.port_label.grid(row=2, column=0, padx=5, pady=5, columnspan=2)
+        self.stb_label.grid(row=2, column=3, padx=5, pady=5, columnspan=2)
+        self.min_label_1.grid(row=3, column=0, padx=5, pady=5)
+        self.max_label_1.grid(row=3, column=1, padx=5, pady=5)
+        self.min_label_2.grid(row=3, column=3, padx=5, pady=5)
+        self.max_label_2.grid(row=3, column=4, padx=5, pady=5)
+
+        self.Box_or_label(df_var)
+        self.Create_Grid_Boxes()
+
+    def Box_or_label(self,df_var):
+        try:
+            if df_var == "Custom":
+                self.df_var_combo = ttk.Combobox(self, textvariable=self.df_var_label, width=6)
+                values = []
+                for i in range(len(app.mainframe.data_cleaning.topFrame.logVars_listbox.curselection())):
+                    values.append(app.mainframe.data_cleaning.topFrame.logVars_listbox.get(i))
+                self.df_var_combo['values'] = values
+                self.df_var_combo.grid(row=0, column=4, padx=5, pady=5, columnspan=3)
+
+            else:
+                if df_var == "hdg":
+                    self.df_var_label.set(app.mainframe.data_cleaning.topFrame.hdg_var.get())
+                if df_var == "twa":
+                    self.df_var_label.set(app.mainframe.data_cleaning.topFrame.twa_var.get())
+                if df_var == "tws":
+                    self.df_var_label.set(app.mainframe.data_cleaning.topFrame.tws_var.get())
+                if df_var == "time":
+                    self.df_var_label.set(app.mainframe.data_cleaning.topFrame.raceTimer_var.get())
+                self.df_var_label_label = tk.Label(self, textvariable=self.df_var_label, font='none 12 bold')
+                self.df_var_label_label.grid(row=0, column=4, padx=5, pady=5, columnspan=3)
+        except:
+            print("Error")
+
+    def Create_Grid_Boxes(self):
+        self.entryBoxes = []
+        for i in range(int(self.range_count_stringVar.get())):
+            portMin = tk.Entry(self, textvariable=self.portMin[i], validate='focus', validatecommand=self.Check_Manual_Input, width=5)
+            portMax = tk.Entry(self, textvariable=self.portMax[i], validate='focus', validatecommand=self.Check_Manual_Input, width=5)
+            stbMin = tk.Entry(self, textvariable=self.stbMin[i], validate='focus', validatecommand=self.Check_Manual_Input, width=5)
+            stbMax = tk.Entry(self, textvariable=self.stbMax[i], validate='focus', validatecommand=self.Check_Manual_Input, width=5)
+            rangesBoxes = [portMin, portMax, stbMin, stbMax]
+            self.entryBoxes.append(rangesBoxes)
+
+        for i in range(int(self.range_count_combo.get())):
+            self.entryBoxes[i][0].grid(row=i+4, column=0, padx=5, pady=5)
+            self.entryBoxes[i][1].grid(row=i+4, column=1, padx=5, pady=5)
+            self.entryBoxes[i][2].grid(row=i+4, column=3, padx=5, pady=5)
+            self.entryBoxes[i][3].grid(row=i+4, column=4, padx=5, pady=5)
+            self.checks_label[i].grid(row=i+4, column=5, padx=5, pady=5)
+
+        for i in range(int(self.range_count_combo.get())):
+            if self.use_filter_bool.get():
+                self.entryBoxes[i][0].configure(state=tk.NORMAL)
+                self.entryBoxes[i][1].configure(state=tk.NORMAL)
+                self.entryBoxes[i][2].configure(state=tk.NORMAL)
+                self.entryBoxes[i][3].configure(state=tk.NORMAL)
+                self.entryBoxes[i][0].bind('<Key>', self.Check_Manual_Input)
+                self.entryBoxes[i][0].bind('<FocusOut>', self.Check_Manual_Input)
+                self.entryBoxes[i][1].bind('<Key>', self.Check_Manual_Input)
+                self.entryBoxes[i][1].bind('<FocusOut>', self.Check_Manual_Input)
+                self.entryBoxes[i][2].bind('<Key>', self.Check_Manual_Input)
+                self.entryBoxes[i][2].bind('<FocusOut>', self.Check_Manual_Input)
+                self.entryBoxes[i][3].bind('<Key>', self.Check_Manual_Input)
+                self.entryBoxes[i][3].bind('<FocusOut>', self.Check_Manual_Input)
+                self.checks[i].set("Fail")
+
+            else:
+                self.entryBoxes[i][0].configure(state=tk.DISABLED)
+                self.entryBoxes[i][1].configure(state=tk.DISABLED)
+                self.entryBoxes[i][2].configure(state=tk.DISABLED)
+                self.entryBoxes[i][3].configure(state=tk.DISABLED)
+                self.checks[i].set("")
+
+    def Check_Manual_Input(self,*args):
+        for i in range(int(self.range_count_combo.get())):
+            if self.portMin[i].get().isdigit() and self.portMax[i].get().isdigit() and self.stbMin[i].get().isdigit() and self.stbMax[i].get().isdigit():
+                self.checks[i].set("OK")
+            else:
+                self.checks[i].set("Fail")
+
+    def Update_Filter(self,*args):
+        self.Create_Grid_Boxes()
+        self.Box_or_label(self.df_var)
 
 class   Filter_Frame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
+
+        ## define Bools
+        self.use_phases_bool = tk.BooleanVar()
+
+        self.hdg_filter = Filter_Range_Selector(self, 'HDG filter', "hdg")
+        self.hdg_filter.grid(row=0, column=0, padx=5, pady=5)
+
+        self.twa_filter = Filter_Range_Selector(self, 'TWA filter', "twa")
+        self.twa_filter.grid(row=0, column=1, padx=5, pady=5)
+
+        self.tws_filter = Filter_Range_Selector(self, 'TWS filter', "tws")
+        self.tws_filter.grid(row=0, column=2, padx=5, pady=5)
+
+        self.timer_filter = Filter_Range_Selector(self, 'Timer filter', "time")
+        self.timer_filter.grid(row=0, column=3, padx=5, pady=5)
+
+        self.custom_1_filter = Filter_Range_Selector(self, 'Custom 1 filter', "Custom")
+        self.custom_1_filter.grid(row=1, column=0, padx=5, pady=5)
+
+        self.custom_2_filter = Filter_Range_Selector(self, 'Custom 2 filter', "Custom")
+        self.custom_2_filter.grid(row=1, column=1, padx=5, pady=5)
+
+        event_frame = self.Create_Event_Options()
+        event_frame.grid(row=1, column=2, padx=5, pady=5)
+
+
+
+    def Create_Event_Options(self):
+        frame = tk.Frame(self)
+        use_phases_check = tk.Checkbutton(frame, text="Use phases as filter", variable=self.use_phases_bool, onvalue=True, offvalue=False)
+        use_phases_check.grid(row=0, column=0, padx=5, pady=5)
+        return frame
+
+    def Create_Filter_Agg(self):
+        vars_used = []
+
+
+        for var in [self.hdg_filter, self.twa_filter, self.tws_filter, self.timer_filter, self.custom_1_filter, self.custom_2_filter]:
+            if var.use_filter_bool.get() == True:
+                vars_used.append(var.df_var_label.get())
+
+        print(vars_used)
+
+
+
+
+    def Update_From_Import(self):
+        print("update from import")
+        self.Create_Filter_Agg()
+
+
+
 
 
 class   Geometric_Transforms_Frame:
@@ -889,6 +1159,9 @@ class Notebook(ttk.Notebook):
     def OnNotebookTabChanged(self, *args):
         self.data_cleaning.topFrame.Update_From_Import()
         self.data_cleaning.topFrame.On_Load_Log()
+        self.data_cleaning.midFrame.Update_From_Import()
+        self.data_cleaning.midFrame.On_Load_Event()
+        self.filter_frame.Update_From_Import()
 
     def Generate_Gloabl_Variables(self,parent, port_main_default, stb_main_default, port_jib_default, stb_jib_default, log_default, event_default, project_default, root_default):
         self.port_main_check_bool = tk.BooleanVar(parent)
@@ -915,9 +1188,6 @@ class App(tk.Tk):
         self.title('Veering Stripe Field')
         self.geometry('1500x1100')
         self.mainframe = Notebook(self)
-
-
-
 
 if __name__ == "__main__":
     app = App()
