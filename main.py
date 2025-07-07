@@ -1,11 +1,14 @@
 import os
 import tkinter as tk
+from doctest import master
 from tkinter import filedialog, StringVar
 from tkinter import ttk
 import logging
 import datetime
 import shutil
 from tkinter.constants import ACTIVE
+from PIL import Image
+from PIL import ImageTk
 
 import veeringVideo
 import veeringLogs
@@ -118,7 +121,6 @@ class   Make_Project_Directory_Window(tk.Toplevel):
         self.success_label.grid(row=8, column=2, padx=10, pady=5)
 
     ## define functions
-
     def Create_Directory(self):
         ## if no root directory selected promt to choose one
         while self.root_dir_selected == False:
@@ -151,7 +153,6 @@ class   Make_Project_Directory_Window(tk.Toplevel):
             logging.error('Failed to create directory')
 
     def On_Select_Root_Dir(self):
-
         try:
             self.root_dir = filedialog.askdirectory(initialdir='/Users/sean/mbp_storage')
             self.root_dir_stringVar.set(self.root_dir)
@@ -203,7 +204,6 @@ class   Import_Frame_Header(tk.Frame):
 
         ## bind events
 
-
     def On_Select_Project_Dir(self):
         try:
             if self.project_dir_stringVar.get() == "No Directory Selected":
@@ -217,7 +217,6 @@ class   Import_Frame_Header(tk.Frame):
         except Exception as e:
             logging.error(e)
             logging.error('Failed to set project directory')
-
 
     def Open_Make_Project_Dir(self):
         self.Proj_Window = Make_Project_Directory_Window(self)
@@ -273,7 +272,10 @@ class   Import_Frame_Source(tk.Frame):
         self.origin_combobox = self.Create_Combo(text_variable=self.origin, combo_list=origin_combo_list, state_pre=["readonly"], current_value=0)
 
         log_type_combo_list = ['Expedition', 'CSV', 'XML']
-        self.log_type_combo = self.Create_Combo(text_variable=self.log_type, combo_list=log_type_combo_list, state_pre=["readonly"], current_value=0)
+        if source_name == 'Event':
+            self.log_type_combo = self.Create_Combo(text_variable=self.log_type, combo_list=log_type_combo_list, state_pre=["readonly"], current_value=2)
+        else:
+            self.log_type_combo = self.Create_Combo(text_variable=self.log_type, combo_list=log_type_combo_list, state_pre=["readonly"], current_value=0)
 
         ## define labels
         self.import_label = tk.Label(self, textvariable=self.import_path, font='none 12', width=20)
@@ -367,37 +369,75 @@ class   Import_Frame_Source(tk.Frame):
             for i in range(5):
                 self.grid_columnconfigure(i, weight=1, minsize=self.column_min_width)
 
+class   Import_Frame_Files(tk.Frame):
+    def __init__(self, master):
+        super().__init__(master)
+
+        ## define labels
+        self.header_label = tk.Label(self, text="Import Files Destination", font='none 16 bold')
+        self.header_label.grid(row=0, column=0, columnspan=3)
+
+    def Print_File_Paths(self,*args):
+        try:
+            labels = ['Port Main', 'STB Main', "Port Jib", "STB Jib", "Log File", "Event File"]
+            stringVars = [app.mainframe.import_frame.port_main_path_final_stringVar,
+            app.mainframe.import_frame.stb_main_path_final_stringVar,
+            app.mainframe.import_frame.port_jib_path_final_stringVar,
+            app.mainframe.import_frame.stb_jib_path_final_stringVar,
+            app.mainframe.import_frame.log_path_final_stringVar,
+            app.mainframe.import_frame.event_path_final_stringVar]
+
+            for i in range(len(labels)):
+                label = tk.Label(self, text=labels[i], font='none 12 bold')
+                label.grid(row=i+1, column=0)
+                path = tk.Label(self, textvariable=stringVars[i], font='none 12')
+                path.grid(row=i+1, column=1)
+
+        except:
+            print("Failed to make file path labels")
+
 class   ImportFrame(tk.Frame):
     def __init__(self,master):
         super().__init__(master)
 
+        ## define default list
+        self.defaults = [0,0,1,1,0,2]
         ## define frames for screen sections
         self.sails = tk.Frame(self)
         self.files = tk.Frame(self)
         self.buttons = tk.Frame(self)
         ## define custom elements
         self.header_frame = Import_Frame_Header(self)
-        self.port_main = Import_Frame_Source(self.sails, check_bool_pre=self.header_frame.port_main_check_bool, source_name="Port Main", source_type="sail")
+        self.port_main = Import_Frame_Source(self.sails, check_bool_pre=self.header_frame.port_main_check_bool, source_name="Port Main", source_type="sail",)
         self.stb_main = Import_Frame_Source(self.sails, check_bool_pre=self.header_frame.stb_main_check_bool, source_name="Stb Main", source_type="sail")
         self.port_jib = Import_Frame_Source(self.sails, check_bool_pre=self.header_frame.port_jib_check_bool, source_name="Port JIB", source_type="sail")
         self.stb_jib = Import_Frame_Source(self.sails, check_bool_pre=self.header_frame.stb_jib_check_bool, source_name="Stb JIB", source_type="sail")
         self.log = Import_Frame_Source(self.files, check_bool_pre=self.header_frame.log_check_bool, source_name="Log", source_type="file")
         self.event = Import_Frame_Source(self.files, check_bool_pre=self.header_frame.event_check_bool, source_name="Event", source_type="file")
+        self.final_file_paths = Import_Frame_Files(self)
 
         ## define bools
         self.use_port_as_stb = tk.BooleanVar()
         self.use_port_as_stb.set(True)
 
         ## define stringVars
+        self.port_main_path_final_stringVar = tk.StringVar()
+        self.port_main_path_final_stringVar.set("")
+        self.stb_main_path_final_stringVar = tk.StringVar()
+        self.stb_main_path_final_stringVar.set("")
+        self.port_jib_path_final_stringVar = tk.StringVar()
+        self.port_jib_path_final_stringVar.set("")
+        self.stb_jib_path_final_stringVar = tk.StringVar()
+        self.stb_jib_path_final_stringVar.set("")
         self.log_path_final_stringVar = tk.StringVar()
-        self.log_path_final_stringVar.set("Log File Not Selected")
+        self.log_path_final_stringVar.set("")
         self.event_path_final_stringVar = tk.StringVar()
-        self.event_path_final_stringVar.set("Event File Not Selected")
-
+        self.event_path_final_stringVar.set("")
 
         ## define buttons
         self.import_sail_mp4_button = tk.Button(self.buttons, width=20, text="Import Sail .MP4", font='none 12 bold',command=self.On_Import_Sail)
         self.logs_process_button = tk.Button(self.buttons, width=20, text="Import Log Files", font='none 12 bold',command=self.On_Import_Logs)
+        self.find_files_button = tk.Button(self.buttons, width=20, text="Find Existing Files", font='none 12 bold',command=self.Find_Files)
 
         ## define checkbuttons
         self.use_port_as_stb_check = tk.Checkbutton(self.buttons, text="Use Port Jib for STB Jib", variable=self.use_port_as_stb, onvalue=True, offvalue=False, command=self.On_Use_Port_for_Stb)
@@ -410,10 +450,14 @@ class   ImportFrame(tk.Frame):
         self.Grid_Elements()
 
         ## bind events to update variables
-
-
-
+        self.import_sail_mp4_button.bind("<Button-1>", self.Update_File_Paths)
+        self.logs_process_button.bind("<Button-1>", self.Update_File_Paths)
+        self.find_files_button.bind("<Button-1>", self.Update_File_Paths)
         ## define functions
+
+    def Update_File_Paths(self,*args):
+        self.final_file_paths.Print_File_Paths()
+
     def On_Use_Port_for_Stb(self):
         if self.use_port_as_stb.get():
             self.stb_jib.import_path.set(self.port_jib.import_path.get())
@@ -455,6 +499,7 @@ class   ImportFrame(tk.Frame):
         self.use_port_as_stb_check.grid(column=0, row=0, columnspan=2)
         self.import_sail_mp4_button.grid(column=0, row=1, columnspan=2)
         self.logs_process_button.grid(column=0, row=2, columnspan=2)
+        self.find_files_button.grid(column=0, row=3, columnspan=2)
         for i in range(2):
             self.buttons.grid_columnconfigure(i, weight=1, minsize=self.port_main.column_min_width)
 
@@ -462,6 +507,7 @@ class   ImportFrame(tk.Frame):
         self.sails.grid(column=0, row=2, columnspan=8, rowspan=5, padx=10, pady=10)
         self.files.grid(column=0, row=7, columnspan=5, rowspan=3, padx=10, pady=10)
         self.buttons.grid(column=0, row=10, columnspan=2, rowspan=3, padx=10, pady=10)
+        self.final_file_paths.grid(column=0, row=13, columnspan=3)
         for i in range(8):
             self.grid_columnconfigure(i, weight=1, minsize=self.port_main.column_min_width)
 
@@ -489,17 +535,20 @@ class   ImportFrame(tk.Frame):
     def On_Import_Sail(self):
         selectedSails = [self.header_frame.port_main_check_bool, self.header_frame.stb_main_check_bool, self.header_frame.port_jib_check_bool,self.header_frame.stb_jib_check_bool]
         folderNames = ['portMain', 'stbMain', 'portJib', 'stbJib']
+        path_stringVars = [self.port_main_path_final_stringVar, self.stb_main_path_final_stringVar, self.port_jib_path_final_stringVar, self.stb_jib_path_final_stringVar]
         for i in range(len(selectedSails)):
             if selectedSails[i].get() == True:
-               self.Import_Sail(i)
+                newPath = self.Import_Sail(i)
+                path_stringVars[i].set(newPath)
 
     def Import_Sail(self,source):
-        print('Import_Sail'+str(source))
+
         folderNames = ['portMain', 'stbMain', 'portJib', 'stbJib']
         sources = [[self.port_main.import_path.get(),self.port_main.timezone.get(), self.port_main.timestep.get(), self.port_main.origin.get(), self.port_main.file_name_entry.get()],
                    [self.stb_main.import_path.get(),self.stb_main.timezone.get(), self.stb_main.timestep.get(), self.stb_main.origin.get(), self.stb_main.file_name_entry.get()],
                    [self.port_jib.import_path.get(), self.port_jib.timezone.get(), self.port_jib.timestep.get(), self.port_jib.origin.get(), self.port_jib.file_name_entry.get()],
                    [self.stb_jib.import_path.get(), self.stb_jib.timezone.get(), self.stb_jib.timestep.get(), self.stb_jib.origin.get(), self.stb_jib.file_name_entry.get()]]
+
         try:
             if sources[source][3] == 'EXIF':
                 existingFileName = sources[source][0].split('/')[-1]
@@ -507,6 +556,7 @@ class   ImportFrame(tk.Frame):
                 shutil.copy(sources[source][0], newPath)
                 try:
                     veeringVideo.Rename_GP_TimeLapse(newPath,sources[source][1],sources[source][2]).Rename()
+                    return newPath
                 except Exception as e:
                     logging.error(e)
                     logging.error("Veering Rename Go Pro failed on"+str(sources[source][0]))
@@ -514,12 +564,42 @@ class   ImportFrame(tk.Frame):
                 try:
                     newPath = os.path.join(self.header_frame.project_dir_stringVar.get(), folderNames[source], sources[source][4]+"_"+str(sources[source][2])+".mp4")
                     shutil.copy(sources[source][0], newPath)
+                    return newPath
                 except Exception as e:
                     logging.error(e)
                     logging.error("Copying File Failed "+str(sources[source][0]))
+
+
         except Exception as e:
             logging.error(e)
             logging.error('Failed to copy' + str(sources[source][0]))
+
+    def Find_Files(self):
+
+        for folder in ['portMain', 'stbMain', 'portJib', 'stbJib']:
+            directory_path = os.path.join(self.header_frame.project_dir_stringVar.get(),folder)
+            files = os.listdir(directory_path)
+            for file in files:
+                if file.endswith(".mp4"):
+                    if folder == "portMain":
+                        self.port_main_path_final_stringVar.set(os.path.join(directory_path, file))
+                    elif folder == "stbMain":
+                        self.stb_main_path_final_stringVar.set(os.path.join(directory_path, file))
+                    elif folder == "portJib":
+                        self.port_jib_path_final_stringVar.set(os.path.join(directory_path, file))
+                    elif folder == "stbJib":
+                        self.stb_jib_path_final_stringVar.set(os.path.join(directory_path, file))
+
+        for folder in ['log', 'event']:
+            directory_path = os.path.join(self.header_frame.project_dir_stringVar.get(),folder)
+            files = os.listdir(directory_path)
+            for file in files:
+                if file.endswith(".csv"):
+                    if folder == "log":
+                        self.log_path_final_stringVar.set(os.path.join(directory_path, file))
+                if file.endswith(".xml"):
+                    if folder == "event":
+                        self.event_path_final_stringVar.set(os.path.join(directory_path, file))
 
 class   Data_Cleaning_Top(tk.Frame):
     def __init__(self, master,width,height):
@@ -527,6 +607,10 @@ class   Data_Cleaning_Top(tk.Frame):
         self['borderwidth'] = 1
         self['relief'] = 'ridge'
         self.config(width=width, height=height)
+
+        self.first_load_log = True
+        self.defaults = ['TWA', 'TWS', 'TWD', 'HDG', 'Heel', 'Trim', 'Rudder', 'Forestay', 'TmToGun', 'timeStamp']
+        self.combo_defaults = [3,0,1,8]
 
         ## define buttons
         self.load_log_button = tk.Button(self, width=10, text="Load Log File", font='none 12 bold', command=self.On_Load_Log)
@@ -572,11 +656,11 @@ class   Data_Cleaning_Top(tk.Frame):
         self.hdg_var_combobox = ttk.Combobox(self, textvariable=self.hdg_var, width=15, font='none 12')
         self.twa_var_combobox = ttk.Combobox(self, textvariable=self.twa_var, width=15, font='none 12')
         self.tws_var_combobox = ttk.Combobox(self, textvariable=self.tws_var, width=15, font='none 12')
-        self.raceTimer_var_combobox = ttk.Combobox(self, textvariable=self.raceTimer_var, width=15, font='none 12')
+        self.raceTimer_var_combobox = ttk.Combobox(self, textvariable=self.raceTimer_var, width=15, font='none 12', )
+        self.raceTimer_var_combobox.set(self.combo_defaults[3])
 
         ## grid
         self.Grid_Elements()
-
         self.logVars_listbox.bind('<<ListboxSelect>>', self.Update_List_Box_1)
         self.refinedVars_listbox.bind('<<ListboxSelect>>', self.Update_List_Box_2)
 
@@ -611,7 +695,6 @@ class   Data_Cleaning_Top(tk.Frame):
         self.tws_var_combobox.grid(row=4, column=5, padx=5, pady=5)
         self.raceTimer_var_combobox.grid(row=5, column=5, padx=5, pady=5)
 
-
     def Update_From_Import(self,*args):
         self.log_path_stringVar.set(app.mainframe.import_frame.log_path_final_stringVar.get())
         self.log_type_stringVar.set(app.mainframe.import_frame.log.log_type.get())
@@ -631,23 +714,57 @@ class   Data_Cleaning_Top(tk.Frame):
         for i in self.refinedVars_listbox.curselection():
             self.annotationVars_listbox.insert(tk.END, self.refinedVars_listbox.get(i))
 
+    def Load_Log_Exp(self, presets):
+        counter = 0
+        preset_ind = []
+        exp_log = veeringLogs.VeeringLog(self.log_path_stringVar.get())
+        exp_log.Expedition_To_DF()
+        exp_log.Add_Time_Zone(int(self.log_timezone_stringVar.get()))
+        exp_log.Add_Time_Stamp()
+        self.exp_log = exp_log
 
-    ## define class functions
+        self.logVars_listbox.delete(0, tk.END)
+        for header in exp_log.log_df.columns:
+            self.logVars_listbox.insert(tk.END, header)
+            if header in presets:
+                preset_ind.append(counter)
+            counter += 1
+
+        for ind in preset_ind:
+            self.logVars_listbox.select_set(ind)
+        self.Update_List_Box_1()
+        preset_list = [self.hdg_var_combobox, self.twa_var_combobox, self.tws_var_combobox,
+                       self.raceTimer_var_combobox]
+
+        for i in range(len(preset_list)):
+            preset_list[i].current(self.combo_defaults[i])
+
     def On_Load_Log(self):
         if self.log_type_stringVar.get() == "Expedition":
             try:
-                exp_log = veeringLogs.VeeringLog(self.log_path_stringVar.get())
-                exp_log.Expedition_To_DF()
-                exp_log.Add_Time_Zone(int(self.log_timezone_stringVar.get()))
-                exp_log.Add_Time_Stamp()
-                self.exp_log = exp_log
+                if self.first_load_log:
+                    self.Load_Log_Exp(self.defaults)
+                    self.first_load_log = False
 
-                for header in exp_log.log_df.columns:
-                    self.logVars_listbox.insert(tk.END, header)
+                else:
+                    current_selection = []
+                    for i in self.logVars_listbox.curselection():
+                        current_selection.append(self.logVars_listbox.get(i))
+                    self.Load_Log_Exp(current_selection)
 
             except Exception as e:
                 logging.error(e)
                 logging.error('Failed to load log')
+
+        try:
+            gun_zero = self.exp_log.log_df.loc[(self.exp_log.log_df['TmToGun']*60*60*24 > 0) & (self.exp_log.log_df['TmToGun']*60*60*24<1),['timeStamp']]
+            self.gun_zero = list(gun_zero['timeStamp'])
+            if len(self.gun_zero) > 0:
+                app.mainframe.data_cleaning.sideFrame.Update_List()
+
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to find zero gun time')
 
     def On_Export_Log(self):
         filterVars = []
@@ -655,6 +772,7 @@ class   Data_Cleaning_Top(tk.Frame):
             for selection in self.logVars_listbox.curselection():
                 filterVars.append(self.logVars_listbox.get(selection))
             self.exp_log.Select_Variables(filterVars)
+            app.mainframe.filter_frame.logs_exported_bool.set(True)
 
         except Exception as e:
             logging.error(e)
@@ -669,6 +787,9 @@ class   Data_Cleaning_Mid(tk.Frame):
         self['borderwidth'] = 1
         self['relief'] = 'ridge'
         self.config(width=width, height=height)
+
+        self.first_load_event = True
+        self.defaults = []
 
         ## define buttons
         self.load_event_button = tk.Button(self, width=10, text="Load Event File", font='none 12 bold', command=self.On_Load_Event)
@@ -696,6 +817,7 @@ class   Data_Cleaning_Mid(tk.Frame):
 
         ## define bool
         self.preserve_phases_bool = tk.BooleanVar()
+        self.preserve_phases_bool.set(True)
 
         ## define Label
         self.add_modify_delete_label = tk.Label(self, text="Add, Modify or Delete Events", font='none 12 bold')
@@ -730,13 +852,14 @@ class   Data_Cleaning_Mid(tk.Frame):
         self.time_second_combobox = ttk.Combobox(self, width=5, font='none 12 bold')
 
         ## define checkbutton
-        self.preserve_phases_checkbutton = tk.Checkbutton(self, text= "Preserve Phases for Filter", variable=self.preserve_phases_bool, onvalue=True, offvalue=False, command=self.On_Preserve_Phase)
+        self.preserve_phases_checkbutton = tk.Checkbutton(self, text= "Preserve Phases for Filter", variable=self.preserve_phases_bool, onvalue=True, offvalue=False)
 
         ## grid
         self.Grid_Elements()
         self.event_type_all_listbox.bind('<<ListboxSelect>>', self.Update_List_Box_1)
         self.event_type_filter_listbox.bind('<<ListboxSelect>>', self.Update_List_Box_2)
 
+    ## define class functions
     def Grid_Elements(self):
         self.load_event_button.grid(row=0, column=0, padx=5, pady=5)
         self.event_path_label.grid(row=0, column=1, padx=5, pady=5)
@@ -778,35 +901,49 @@ class   Data_Cleaning_Mid(tk.Frame):
         self.event_type_annotation_label.grid(row=1, column=8, padx=5, pady=5)
         self.event_type_annotation_listbox.grid(row=2, column=8, padx=5, pady=5, rowspan=5)
 
-    ## define class functions
-
     def Update_From_Import(self,*args):
         self.event_path_stringVar.set(app.mainframe.import_frame.event_path_final_stringVar.get())
         self.event_type_stringVar.set(app.mainframe.import_frame.event.log_type.get())
         self.event_timezone_stringVar.set(app.mainframe.import_frame.event.timezone.get())
 
-    def On_Preserve_Phase(self):
-        print('On_Preserve_Phase')
+    def Load_Event_XML(self, presets):
+        counter = 0
+        preset_ind = []
+        self.eventFile = veeringLogs.VeeringEvent(self.event_path_stringVar.get())
+        self.eventFile.Load_XML()
+        self.eventFile.Add_Time_Zone(self.event_timezone_stringVar.get())
+        self.eventFile.Build_Event_Dict()
+        self.eventFile.Build_Phase_Dict()
+
+        self.phase_dict = self.eventFile.phases
+        self.event_dict = self.eventFile.events
+
+        event_typ_unique = []
+        for key in self.event_dict.keys():
+            if self.event_dict[key][1] not in event_typ_unique:
+                event_typ_unique.append(self.event_dict[key][1])
+                if self.event_dict[key][1] in presets:
+                    preset_ind.append(counter)
+            counter += 1
+        self.event_type_all_listbox.delete(0, tk.END)
+        for type in event_typ_unique:
+            self.event_type_all_listbox.insert(tk.END, type)
+
+        for ind in preset_ind:
+            self.event_type_all_listbox.select_set(ind)
 
     def On_Load_Event(self):
         if self.event_type_stringVar.get() == 'XML':
             try:
-                self.eventFile = veeringLogs.VeeringEvent(self.event_path_stringVar.get())
-                self.eventFile.Load_XML()
-                self.eventFile.Add_Time_Zone(self.event_timezone_stringVar.get())
-                self.eventFile.Build_Event_Dict()
-                self.eventFile.Build_Phase_Dict()
+                if self.first_load_event:
+                    self.Load_Event_XML(self.defaults)
+                    self.first_load_event = False
 
-                self.phase_dict = self.eventFile.phases
-                self.event_dict = self.eventFile.events
-
-                event_typ_unique = []
-                for key in self.event_dict.keys():
-                    if self.event_dict[key][1] not in event_typ_unique:
-                        event_typ_unique.append(self.event_dict[key][1])
-
-                for type in event_typ_unique:
-                    self.event_type_all_listbox.insert(tk.END, type)
+                else:
+                    current_selection = []
+                    for i in self.event_type_all_listbox.curselection():
+                        current_selection.append(self.event_type_all_listbox.get(i))
+                    self.Load_Event_XML(current_selection)
 
             except Exception as e:
                 logging.error(e)
@@ -824,19 +961,25 @@ class   Data_Cleaning_Mid(tk.Frame):
         for i in self.event_type_filter_listbox.curselection():
             self.event_type_annotation_listbox.insert(tk.END, self.event_type_filter_listbox.get(i))
             type.append(self.event_type_filter_listbox.get(i))
-        print(type)
         for key in self.event_dict.keys():
             if self.event_dict[key][1] in type:
                 self.event_list_listbox.insert(tk.END, str(self.event_dict[key][0])+" - "+str(self.event_dict[key][1])+" - "+str(self.event_dict[key][2]))
 
     def On_Export_Event(self):
-        if self.preserve_phases_bool:
-            try:
-                self.eventFile.build_Phase_DF()
+        try:
+            if self.preserve_phases_bool.get():
+                self.eventFile.Build_Phase_DF()
+                app.mainframe.filter_frame.phases_exported_bool.set(True)
 
-            except Exception as e:
-                logging.error(e)
-                logging.error('Failed to build phase DF')
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to build phase DF')
+        try:
+            self.eventFile.Build_Event_DF()
+            app.mainframe.filter_frame.events_exported_bool.set(True)
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to build event DF')
 
     def On_Add_Event(self):
         print("Event File Added")
@@ -872,6 +1015,11 @@ class   Data_Cleaning_Side:
         self.add_event_button.grid(row=7, column=0, padx=5, pady=5)
 
         ## define class functions
+    def Update_List(self):
+        self.race_timer_listbox.delete(0, tk.END)
+        for time in app.mainframe.data_cleaning.topFrame.gun_zero:
+            self.race_timer_listbox.insert(tk.END, time.replace(microsecond=0))
+
     def On_Add_Times(self):
         print('add_event_times')
 
@@ -892,13 +1040,14 @@ class   Data_Cleaning_Frame(tk.Frame):
         self.sideFrame.frame.grid(row=0, column=7, padx=10, pady=10, rowspan=10, columnspan=5)
 
 class   Filter_Range_Selector(tk.Frame):
-    def __init__(self, master, variable_name,df_var):
+    def __init__(self, master, variable_name,df_var,default_active,default_values):
         super().__init__(master)
-        self.df_var = df_var
-        self.variable_name = variable_name
+        self.df_var = df_var ## log df label
+        self.variable_name = variable_name ## human readable variable name for label
         ## define Bools
         self.use_filter_bool = tk.BooleanVar()
-        self.use_filter_bool.set(False)
+        self.use_filter_bool.set(default_active)
+
 
         ## define stingVars
         self.range_count_stringVar = tk.StringVar()
@@ -924,6 +1073,13 @@ class   Filter_Range_Selector(tk.Frame):
         self.check_2 = tk.StringVar()
         self.check_3 = tk.StringVar()
         self.check_4 = tk.StringVar()
+
+        if self.use_filter_bool.get():
+            self.port_min_1_stringVar.set(default_values[0])
+            self.port_max_1_stringVar.set(default_values[1])
+            self.stb_min_1_stringVar.set(default_values[2])
+            self.stb_max_1_stringVar.set(default_values[3])
+
         self.portMin = [self.port_min_1_stringVar, self.port_min_2_stringVar, self.port_min_3_stringVar, self.port_min_4_stringVar]
         self.portMax = [self.port_max_1_stringVar, self.port_max_2_stringVar, self.port_max_3_stringVar, self.port_max_4_stringVar]
         self.stbMin = [self.stb_min_1_stringVar, self.stb_min_2_stringVar, self.stb_min_3_stringVar, self.stb_min_4_stringVar]
@@ -966,6 +1122,7 @@ class   Filter_Range_Selector(tk.Frame):
 
         self.Box_or_label(df_var)
         self.Create_Grid_Boxes()
+        self.Update_Filter()
 
     def Box_or_label(self,df_var):
         try:
@@ -1007,6 +1164,7 @@ class   Filter_Range_Selector(tk.Frame):
             self.entryBoxes[i][2].grid(row=i+4, column=3, padx=5, pady=5)
             self.entryBoxes[i][3].grid(row=i+4, column=4, padx=5, pady=5)
             self.checks_label[i].grid(row=i+4, column=5, padx=5, pady=5)
+            self.entryBoxes[i][3].forget()
 
         for i in range(int(self.range_count_combo.get())):
             if self.use_filter_bool.get():
@@ -1045,32 +1203,105 @@ class   Filter_Range_Selector(tk.Frame):
 class   Filter_Frame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
-
         ## define Bools
         self.use_phases_bool = tk.BooleanVar()
+        self.use_phases_bool.set(True)
+        self.logs_exported_bool = tk.BooleanVar()
+        self.logs_exported_bool.set(False)
+        self.phases_exported_bool = tk.BooleanVar()
+        self.phases_exported_bool.set(False)
+        self.events_exported_bool = tk.BooleanVar()
+        self.events_exported_bool.set(False)
+        self.log_filter_sum_run_bool = tk.BooleanVar()
+        self.log_filter_sum_run_bool.set(False)
+        self.filter_agg_bool = tk.BooleanVar()
+        self.filter_agg_bool.set(False)
 
-        self.hdg_filter = Filter_Range_Selector(self, 'HDG filter', "hdg")
+        ## define lists
+        self.log_vars = []
+        self.upwind_port_ts = []
+        self.upwind_stb_ts = []
+
+        self.hdg_filter = Filter_Range_Selector(self, 'HDG filter', "hdg",False, [0,0,0,0])
         self.hdg_filter.grid(row=0, column=0, padx=5, pady=5)
 
-        self.twa_filter = Filter_Range_Selector(self, 'TWA filter', "twa")
+        self.twa_filter = Filter_Range_Selector(self, 'TWA filter', "twa", True, [-50,-30,30,50])
         self.twa_filter.grid(row=0, column=1, padx=5, pady=5)
 
-        self.tws_filter = Filter_Range_Selector(self, 'TWS filter', "tws")
+        self.tws_filter = Filter_Range_Selector(self, 'TWS filter', "tws", True, [0,20,0,20])
         self.tws_filter.grid(row=0, column=2, padx=5, pady=5)
 
-        self.timer_filter = Filter_Range_Selector(self, 'Timer filter', "time")
+        self.timer_filter = Filter_Range_Selector(self, 'Timer filter', "time", False, [0,0,0,0])
         self.timer_filter.grid(row=0, column=3, padx=5, pady=5)
 
-        self.custom_1_filter = Filter_Range_Selector(self, 'Custom 1 filter', "Custom")
+        self.custom_1_filter = Filter_Range_Selector(self, 'Custom 1 filter', "Custom", False, [0,0,0,0])
         self.custom_1_filter.grid(row=1, column=0, padx=5, pady=5)
 
-        self.custom_2_filter = Filter_Range_Selector(self, 'Custom 2 filter', "Custom")
+        self.custom_2_filter = Filter_Range_Selector(self, 'Custom 2 filter', "Custom", False, [0,0,0,0])
         self.custom_2_filter.grid(row=1, column=1, padx=5, pady=5)
 
-        event_frame = self.Create_Event_Options()
-        event_frame.grid(row=1, column=2, padx=5, pady=5)
+        self.event_frame = self.Create_Event_Options()
+        self.event_frame.grid(row=1, column=2, padx=5, pady=5)
+
+        self.entire_set_summary = self.Create_Import_Summary_Labels()
+        self.entire_set_summary.grid(row=1, column=3, padx=5, pady=5)
+
+        self.button_frame = self.Create_Buttons()
+        self.button_frame.grid(row=2, column=0, padx=5, pady=5)
+
+    def Generate_Filter_Summary(self):
+        frame = tk.Frame(self)
+        header_label = tk.Label(frame, text="Filter TS Count", font='none 12 bold')
+        port_Label = tk.Label(frame, text="Port Count", font='none 12 bold')
+        stb_Label = tk.Label(frame, text="Stb Count", font='none 12 bold')
+        header_label.grid(row=0, column=0, padx=5, pady=5, columnspan=3)
+        port_Label.grid(row=1, column=1, padx=5, pady=5)
+        stb_Label.grid(row=1, column=2, padx=5, pady=5)
+
+        stringVars_list = []
+        labels_list = []
+        if self.log_filter_sum_run_bool.get():
+            for i in range(len(self.aggregation_combo_list)):
+                var = self.aggregation_combo_list[i].get()
+                index = self.log_vars_to_filter.index(var)
+                port_count = len(self.log_vars_filters[index][0])
+                stb_count = len(self.log_vars_filters[index][1])
+                stringVar_var = tk.StringVar()
+                stringVar_var.set(var)
+                stringVar_pt = tk.StringVar()
+                stringVar_pt.set(str(port_count))
+                stringVar_stb = tk.StringVar()
+                stringVar_stb.set(str(stb_count))
+                stringVars_list.append([stringVar_var, stringVar_pt, stringVar_stb])
+                label_var = tk.Label(frame, textvariable=stringVar_var)
+                label_pt = tk.Label(frame, textvariable=stringVar_pt, font='none 12')
+                label_stb = tk.Label(frame, textvariable=stringVar_stb, font='none 12')
+                labels_list.append([label_var, label_pt, label_stb])
+        if self.filter_agg_bool.get():
+            port_count = len(self.filter_port_ts_agg)
+            stringVar_var = tk.StringVar()
+            stb_count = len(self.filter_stb_ts_agg)
+            stringVar_var.set("Aggregated Counts")
+            stringVar_pt = tk.StringVar()
+            stringVar_pt.set(str(port_count))
+            stringVar_stb = tk.StringVar()
+            stringVar_stb.set(str(stb_count))
+            stringVars_list.append([stringVar_var, stringVar_pt, stringVar_stb])
+            label_var = tk.Label(frame, textvariable=stringVar_var)
+            label_pt = tk.Label(frame, textvariable=stringVar_pt, font='none 12')
+            label_stb = tk.Label(frame, textvariable=stringVar_stb, font='none 12')
+            labels_list.append([label_var, label_pt, label_stb])
+
+        for i in range(len(labels_list)):
+            labels_list[i][0].grid(row=i+2, column=0, padx=5, pady=5)
+            labels_list[i][1].grid(row=i+2, column=1, padx=5, pady=5)
+            labels_list[i][2].grid(row=i+2, column=2, padx=5, pady=5)
+
+        self.log_filter_sum_run_bool.set(True)
 
 
+        self.filter_summary = frame
+        self.filter_summary.grid(row=2, column=2, padx=5, pady=5)
 
     def Create_Event_Options(self):
         frame = tk.Frame(self)
@@ -1078,31 +1309,473 @@ class   Filter_Frame(tk.Frame):
         use_phases_check.grid(row=0, column=0, padx=5, pady=5)
         return frame
 
+    def Create_Buttons(self):
+        frame = tk.Frame(self)
+        generate_log_filters = tk.Button(frame, width=20, text="Generate Filter Aggregation", font='none 12 bold', command=self.Generate_Filters)
+        aggregate_filters_button = tk.Button(frame, width=20, text="Aggregate Filters", font='none 12 bold', command=self.Aggregate_Filters)
+        create_jpg_button = tk.Button(frame, width=20, text="Create JPG's", font='none 12 bold', command=self.Generate_JPG)
+
+        generate_log_filters.grid(row=0, column=0, padx=5, pady=5)
+        aggregate_filters_button.grid(row=1, column=0, padx=5, pady=5)
+        create_jpg_button.grid(row=2, column=0, padx=5, pady=5)
+
+        return frame
+
+    def Create_Import_Summary_Labels(self):
+        frame = tk.Frame(self)
+        self.log_rows_stringVar = tk.StringVar()
+        self.log_rows_stringVar.set("Nil Rows")
+        self.log_columns_stringVar = tk.StringVar()
+        self.log_columns_stringVar.set("Nil Columns")
+
+        self.log_header_label = tk.Label(frame, text="Log File Imported with", font='none 12 bold')
+        self.log_rows_label = tk.Label(frame, textvariable=self.log_rows_stringVar, font='none 12')
+        self.log_columns_label = tk.Label(frame, textvariable=self.log_columns_stringVar, font='none 12')
+
+        self.phases_rows_stringVar = tk.StringVar()
+        self.phases_rows_stringVar.set("Nil Rows")
+        self.event_rows_stringVar = tk.StringVar()
+        self.event_rows_stringVar.set("Nil Rows")
+        self.event_columns_stringVar = tk.StringVar()
+        self.event_columns_stringVar.set("Nil Columns")
+
+        self.phase_header_label = tk.Label(frame, text="Phase File Imported with", font='none 12 bold')
+        self.phases_rows_label = tk.Label(frame, textvariable=self.phases_rows_stringVar, font='none 12')
+        self.event_header_label = tk.Label(frame, text="EventFile Imported with", font='none 12 bold')
+        self.event_rows_label = tk.Label(frame, textvariable=self.event_rows_stringVar, font='none 12')
+        self.event_columns_label = tk.Label(frame, textvariable=self.event_columns_stringVar, font='none 12')
+
+        self.log_header_label.grid(row=0, column=0, padx=5, pady=5, columnspan=2)
+        self.log_rows_label.grid(row=1, column=0, padx=5, pady=5)
+        self.log_columns_label.grid(row=1, column=1, padx=5, pady=5)
+        self.phase_header_label.grid(row=2, column=0, padx=5, pady=5, columnspan=2)
+        self.phases_rows_label.grid(row=3, column=0, padx=5, pady=5)
+        self.event_header_label.grid(row=4, column=0, padx=5, pady=5, columnspan=2)
+        self.event_rows_label.grid(row=5, column=0, padx=5, pady=5)
+        self.event_columns_label.grid(row=5, column=1, padx=5, pady=5)
+
+        return frame
+
+    def Generate_Phase_Filters(self):
+        self.phases_filter = [app.mainframe.data_cleaning.midFrame.eventFile.phase_df['timeStamp'],
+                              app.mainframe.data_cleaning.midFrame.eventFile.phase_df['timeStamp']]
+
+    def Generate_Log_Filters(self):
+        self.log_vars_to_filter = []
+        self.log_vars_filters = []
+        for  logVar in [self.hdg_filter, self.twa_filter, self.tws_filter, self.timer_filter, self.custom_1_filter, self.custom_2_filter]:
+            if logVar.use_filter_bool.get():
+                self.log_vars_to_filter.append(logVar.df_var_label.get())
+                portMin = []
+                portMax = []
+                stbMin = []
+                stbMax = []
+                for i in range(int(logVar.range_count_stringVar.get())):
+                    portMin.append(int(logVar.portMin[i].get()))
+                    portMax.append(int(logVar.portMax[i].get()))
+                    stbMin.append(int(logVar.stbMin[i].get()))
+                    stbMax.append(int(logVar.stbMax[i].get()))
+
+                port_ts, stb_ts = app.mainframe.data_cleaning.topFrame.exp_log.Get_Filter_TS(portMin, portMax, stbMin, stbMax,logVar.df_var_label.get())
+                self.log_vars_filters.append([port_ts, stb_ts])
+
     def Create_Filter_Agg(self):
-        vars_used = []
+        frame = tk.Frame(self)
+        self.aggregation_combo_list = []
+        self.aggregation_combo_stringVars = []
+        self.and_or_stringVar_list = []
+        self.and_or_radio_list = []
+        if self.use_phases_bool.get() == True:
+            self.log_vars_to_filter.append('Phases')
+            self.log_vars_filters.append(self.phases_filter)
 
+        for i in range(len(self.log_vars_to_filter)):
+            self.aggregation_combo_stringVars.append(tk.StringVar())
+            combo = ttk.Combobox(frame, width=10, textvariable=self.aggregation_combo_stringVars[i])
+            combo['values'] = self.log_vars_to_filter
+            combo.set(self.log_vars_to_filter[i])
+            self.aggregation_combo_list.append(combo)
+            self.and_or_stringVar_list.append(tk.StringVar())
+            self.aggregation_combo_list[i].grid(row=i, column=0, padx=5, pady=5)
+            if i < len(self.log_vars_to_filter)-1:
+                radio = [ttk.Radiobutton(frame, width=10, text="AND", variable=self.and_or_stringVar_list[i], value='and'),
+                     ttk.Radiobutton(frame, width=10, text="OR", variable=self.and_or_stringVar_list[i], value='or')]
+                self.and_or_stringVar_list[i].set('and')
+                self.and_or_radio_list.append(radio)
+                self.and_or_radio_list[i][0].grid(row=i, column=1, padx=5, pady=5)
+                self.and_or_radio_list[i][1].grid(row=i, column=2, padx=5, pady=5)
 
-        for var in [self.hdg_filter, self.twa_filter, self.tws_filter, self.timer_filter, self.custom_1_filter, self.custom_2_filter]:
-            if var.use_filter_bool.get() == True:
-                vars_used.append(var.df_var_label.get())
+        return frame
 
-        print(vars_used)
-
-
-
+    def Generate_Filters(self):
+        if self.use_phases_bool.get():
+            self.Generate_Phase_Filters()
+        self.Generate_Log_Filters()
+        self.agg_frame = self.Create_Filter_Agg()
+        self.agg_frame.grid(row=2, column=1, padx=5, pady=5)
+        self.log_filter_sum_run_bool.set(True)
+        self.Generate_Filter_Summary()
 
     def Update_From_Import(self):
-        print("update from import")
-        self.Create_Filter_Agg()
+        if self.logs_exported_bool.get():
+            rows = app.mainframe.data_cleaning.topFrame.exp_log.log_df.shape[0]
+            cols = app.mainframe.data_cleaning.topFrame.exp_log.log_df.shape[1]
+            self.log_rows_stringVar.set("with "+str(rows)+" rows")
+            self.log_columns_stringVar.set("with "+str(cols)+" columns")
+
+        if self.phases_exported_bool.get():
+            rows = app.mainframe.data_cleaning.midFrame.eventFile.phase_df.shape[0]
+            self.phases_rows_stringVar.set("with "+str(rows)+" rows")
+
+        if self.logs_exported_bool.get():
+            rows = app.mainframe.data_cleaning.midFrame.eventFile.events_df.shape[0]
+            cols = app.mainframe.data_cleaning.midFrame.eventFile.events_df.shape[1]
+            self.event_rows_stringVar.set("with "+str(rows)+" rows")
+            self.event_columns_stringVar.set("with "+str(cols)+" columns")
+
+    def Aggregate_Filters(self,*args):
+        var = self.aggregation_combo_list[0].get()
+        index = self.log_vars_to_filter.index(var)
+        filter_port_ts_agg = self.log_vars_filters[index][0]
+        filter_stb_ts_agg = self.log_vars_filters[index][1]
+
+        for i in range(1,len(self.aggregation_combo_list)):
+            var_next = self.aggregation_combo_list[i].get()
+            index_next = self.log_vars_to_filter.index(var_next)
+            combine_type = self.and_or_stringVar_list[i-1].get()
+
+            if combine_type == 'and':
+                filter_port_ts_agg = list(set(filter_port_ts_agg) & set(self.log_vars_filters[index_next][0]))
+                filter_stb_ts_agg = list(set(filter_stb_ts_agg) & set(self.log_vars_filters[index_next][1]))
+
+            elif combine_type == 'or':
+                filter_port_ts_agg = list(set(filter_port_ts_agg) | set(self.log_vars_filters[index_next][0]))
+                filter_stb_ts_agg = list(set(filter_stb_ts_agg) | set(self.log_vars_filters[index_next][1]))
+
+        self.filter_port_ts_agg = filter_port_ts_agg
+        self.filter_stb_ts_agg = filter_stb_ts_agg
+        self.filter_agg_bool.set(True)
+        self.Generate_Filter_Summary()
+
+    def JPG_Sumary(self,filter_sumary):
+        self.sumary_frame = tk.Frame(self)
+        self.labels = []
+        for i in range(len(filter_sumary)):
+            label = tk.Label(self.sumary_frame, text = str(filter_sumary[i][0])+" has "+str(filter_sumary[i][1])+" images retained")
+            label.grid(row=i, column=0)
+            self.labels.append(label)
+        self.sumary_frame.grid(row=3, column=0, padx=5, pady=5)
+
+    def Generate_JPG(self,*args):
+        filePaths = [app.mainframe.import_frame.port_main_path_final_stringVar.get(),
+                     app.mainframe.import_frame.stb_main_path_final_stringVar.get(),
+                     app.mainframe.import_frame.port_jib_path_final_stringVar.get(),
+                     app.mainframe.import_frame.stb_jib_path_final_stringVar.get()]
+        sails = ['portMain', 'stbMain', 'portJib', 'stbJib']
+        to_filter = []
+        filter_sumary = []
+        for i in range(len(filePaths)):
+            try:
+                if sails[i] == 'stbJib' and app.mainframe.import_frame.use_port_as_stb.get() == True:
+                    port_path = os.path.join(app.mainframe.import_frame.header_frame.project_dir_stringVar.get(),'portJib','jpg')
+                    stb_path = os.path.join(app.mainframe.import_frame.header_frame.project_dir_stringVar.get(),'stbJib','jpg')
+                    shutil.copytree(port_path, stb_path)
+                    print("copied from port")
+
+                else:
+                    veeringVideo.SailTimeLapse(filePaths[i],sails[i]).TimeLapse_To_JPG()
+
+                if sails[i] == 'stbMain' or sails[i] == 'stbJib':
+                    to_filter.append([os.path.join(app.mainframe.import_frame.header_frame.project_dir_stringVar.get(),str(sails[i]),'jpg'),self.filter_stb_ts_agg, str(sails[i])])
+
+                elif sails[i] == 'portMain' or sails[i] == 'portJib':
+                    to_filter.append([os.path.join(app.mainframe.import_frame.header_frame.project_dir_stringVar.get(),str(sails[i]),'jpg'),self.filter_port_ts_agg, str(sails[i])])
+
+            except Exception as e:
+                logging.error(e)
+                logging.error('Failed to create JPG for '+str(sails[i]))
+
+        for i in range(len(to_filter)):
+            try:
+                veeringVideo.Filter_JPG(to_filter[i][0],to_filter[i][1]).Remove_Files()
+                filter_sumary.append([to_filter[i][2],len(os.listdir(to_filter[i][0]))])
+                print("Filtered "+str(to_filter[i][0]))
+
+            except Exception as e:
+                logging.error(e)
+                logging.error('Failed to filter JPG for '+str(sails[i]))
+
+        self.JPG_Sumary(filter_sumary)
+
+class   Visual_Picker(tk.Toplevel):
+    def __init__(self, master, file_path,orig_height,orig_width, flip_vertical, flip_horizontal, rotate_90, rotate_270, start_values):
+        super().__init__(master)
+        self.crop_top_stringVar = tk.StringVar()
+        self.crop_bottom_stringVar = tk.StringVar()
+        self.crop_lhs_stringVar = tk.StringVar()
+        self.crop_rhs_stringVar = tk.StringVar()
+
+        self.file_path = file_path
+        self.flip_vertical = flip_vertical
+        self.flip_horizontal = flip_horizontal
+        self.rotate_90 = rotate_90
+        self.rotate_270 = rotate_270
+        self.canvas_width = 666
+        self.canvas_height = orig_height * (self.canvas_width / orig_width)
+        self.scale = self.canvas_height / orig_height
+
+        self.main_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='#C8C8C8')
+        self.top_scale = tk.Scale(self, orient='horizontal', length=self.canvas_width, from_=0,
+                              to=self.canvas_width, command=self.On_Crop_Slider)
+        self.top_scale.set(int(start_values[0]*self.scale))
+        self.bottom_scale = tk.Scale(self, orient='horizontal', length=self.canvas_width, from_=0,
+                                 to=self.canvas_width, command=self.On_Crop_Slider)
+        self.bottom_scale.set(int(start_values[3]*self.scale))
+        self.left_scale = tk.Scale(self, orient='vertical', length=self.canvas_height, from_=0,
+                               to=self.canvas_height, command=self.On_Crop_Slider)
+        self.left_scale.set(int(start_values[1]*self.scale))
+        self.right_scale = tk.Scale(self, orient='vertical', length=self.canvas_height, from_=0,
+                                to=self.canvas_height, command=self.On_Crop_Slider)
+        self.right_scale.set(int(start_values[2]*self.scale))
+        image = Image.open(self.file_path)
+
+        image = image.resize((int(self.canvas_width), int(self.canvas_height)), Image.Resampling.LANCZOS)
+        if self.flip_vertical:
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        if self.flip_horizontal:
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        if self.rotate_90:
+            image = image.transpose(Image.ROTATE_90)
+        if self.rotate_270:
+            image = image.transpose(Image.ROTATE_270)
+        self.image = ImageTk.PhotoImage(image)
+        self.thumbnail_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='#C8C8C8')
+        self.thumbnail_canvas.create_image(self.canvas_width/2, self.canvas_height/2, image=self.image)
+        self.thumbnail_canvas.grid(row=1, column=1, rowspan=3)
+
+    ## Create Buttons
 
 
+    ## Grid Canvas and scales
+        self.main_canvas.grid(column=1, row=1)
+        self.top_scale.grid(column=1, row=0)
+        self.bottom_scale.grid(column=1, row=2)
+        self.left_scale.grid(column=0, row=1)
+        self.right_scale.grid(column=2, row=1)
 
 
+    def Display_Image(self):
+        image = Image.open(self.file_path)
+        image = image.resize((int(self.canvas_width), int(self.canvas_height)), Image.Resampling.LANCZOS)
+        if self.flip_vertical:
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        if self.flip_horizontal:
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        if self.rotate_90:
+            image = image.transpose(Image.ROTATE_90)
+        if self.rotate_270:
+            image = image.transpose(Image.ROTATE_270)
+        image = image.crop((int(self.top_scale.get()), int(self.left_scale.get()), int(self.bottom_scale.get()), int(self.right_scale.get())))
+        self.image = ImageTk.PhotoImage(image)
+        horizontal_centre = int(((int(self.bottom_scale.get()) - int(self.top_scale.get())) / 2) + int(self.top_scale.get()))
+        vertical_centre = int(((int(self.right_scale.get()) - int(self.left_scale.get())) / 2) + int(self.left_scale.get()))
+        self.thumbnail_canvas = tk.Canvas(self, width=self.canvas_width, height=self.canvas_height, bg='#C8C8C8')
+        self.thumbnail_canvas.create_image(horizontal_centre, vertical_centre, image=self.image)
+        self.thumbnail_canvas.grid(row=1, column=1, rowspan=3)
 
-class   Geometric_Transforms_Frame:
+    def On_Crop_Slider(self,*args):
+        self.Display_Image()
+        self.crop_top_stringVar.set(str(int(self.left_scale.get()/self.scale)))
+        self.crop_bottom_stringVar.set(str(int(self.right_scale.get()/self.scale)))
+        self.crop_lhs_stringVar.set(str(int(self.top_scale.get()/self.scale)))
+        self.crop_rhs_stringVar.set(str(int(self.bottom_scale.get()/self.scale)))
+
+class   Sail_Geometric_Properties(tk.Frame):
+    def __init__(self, master,imgDir,sail,defaults):
+        super().__init__(master)
+
+        ## definevars
+        self.img_index = 0
+        self.directory = imgDir
+        self.defaults = defaults
+
+        ## define bools
+        self.flip_horizontal_bool = tk.BooleanVar()
+        self.flip_vertical_bool  = tk.BooleanVar()
+        self.rotate_90_bool  = tk.BooleanVar()
+        self.rotate_270_bool  = tk.BooleanVar()
+
+        ## define stringvars
+        self.crop_lhs_stringVar = tk.StringVar()
+        self.crop_rhs_stringVar = tk.StringVar()
+        self.crop_top_stringVar = tk.StringVar()
+        self.crop_bottom_stringVar = tk.StringVar()
+        self.mask_lhs_stringVar = tk.StringVar()
+        self.mask_rhs_stringVar = tk.StringVar()
+        self.mask_top_stringVar = tk.StringVar()
+        self.mask_bottom_stringVar = tk.StringVar()
+        self.sail_header_stringVar = tk.StringVar()
+        self.sail_header_stringVar.set(sail)
+        self.change_preview_ind_stringVar = tk.StringVar()
+        self.change_preview_ind_stringVar.set("0")
+
+        ## create checkboxes
+        self.flip_horizontal_check = tk.Checkbutton(self, text="Flip Horizontal", variable=self.flip_horizontal_bool, onvalue=True, offvalue=False)
+        self.flip_vertical_check = tk.Checkbutton(self, text="Flip Vertical", variable=self.flip_vertical_bool, onvalue=True, offvalue=False)
+        self.rotate_90_check = tk.Checkbutton(self, text="Rotate 90", variable=self.rotate_90_bool, onvalue=True, offvalue=False)
+        self.rotate_270_check = tk.Checkbutton(self, text="Rotate 270", variable=self.rotate_270_bool, onvalue=True, offvalue=False)
+
+        ## create entryboxes
+        self.crop_lhs_entry = tk.Entry(self, textvariable=self.crop_lhs_stringVar, width=5)
+        self.crop_rhs_entry = tk.Entry(self, textvariable=self.crop_rhs_stringVar, width=5)
+        self.crop_top_entry = tk.Entry(self, textvariable=self.crop_top_stringVar, width=5)
+        self.crop_bottom_entry = tk.Entry(self, textvariable=self.crop_bottom_stringVar, width=5)
+        self.mask_lhs_entry = tk.Entry(self, textvariable=self.mask_lhs_stringVar, width=5)
+        self.mask_rhs_entry = tk.Entry(self, textvariable=self.mask_rhs_stringVar, width=5)
+        self.mask_top_entry = tk.Entry(self, textvariable=self.mask_top_stringVar, width=5)
+        self.mask_bottom_entry = tk.Entry(self, textvariable=self.mask_bottom_stringVar, width=5)
+
+        ## create Buttons
+        self.graph_chooser_button = tk.Button(self, text="Launch Graphical Chooser", command=self.Launch_Graphical_Chooser)
+        self.load_preview_button = tk.Button(self, text="Load Preview", command=self.Load_Preview)
+        self.update_preview_button = tk.Button(self, text="Update Preview", command=self.Update_Preview)
+
+        ## create labels
+        self.sail_header_label = tk.Label(self, textvariable=self.sail_header_stringVar, font='none 12 bold')
+        self.preview_label = tk.Label(self, text="Original Image", font='none 12')
+        self.crop_label = tk.Label(self, text="Crop Values", font='none 12')
+        self.mask_label = tk.Label(self, text="Mask Values", font='none 12')
+        self.small_labels = []
+        for text in ['Crop LHS','Crop Top', 'Crop Bottom', 'Crop RHS', 'Mask Top','Mask  Bottom', 'Mask  LHS', 'Mask  RHS']:
+            self.small_labels.append(tk.Label(self, text=text, font='none 10'))
+
+        ## create combobox
+        self.change_preview_ind_combo = ttk.Combobox(self, textvariable=self.change_preview_ind_stringVar, width=5)
+        self.change_preview_ind_combo['values'] = [-100, -10, -1, 0, 1, 10, 100]
+
+        ## Grid
+        self.sail_header_label.grid(column=0, row=0, padx=5, pady=5)
+        self.preview_label.grid(column=1, row=0, padx=5, pady=5)
+        self.crop_label.grid(column=2, row=0, padx=5, pady=5, columnspan=2)
+        self.mask_label.grid(column=4, row=0, padx=5, pady=5, columnspan=2)
+
+        self.load_preview_button.grid(row=1, column=0)
+        self.graph_chooser_button.grid(row=2, column=0)
+        self.update_preview_button.grid(row=3, column=0)
+        self.change_preview_ind_combo.grid(row=4, column=0)
+
+        self.small_labels[0].grid(row=1,column=2)
+        self.crop_lhs_entry.grid(row=2, column=2)
+        self.small_labels[1].grid(row=1,column=3)
+        self.crop_top_entry.grid(row=2, column=3)
+        self.small_labels[2].grid(row=3,column=2)
+        self.crop_bottom_entry.grid(row=4, column=2)
+        self.small_labels[3].grid(row=3,column=3)
+        self.crop_rhs_entry.grid(row=4, column=3)
+
+        self.small_labels[4].grid(row=1,column=4)
+        self.mask_lhs_entry.grid(row=2,column=4)
+        self.small_labels[5].grid(row=1,column=5)
+        self.mask_top_entry.grid(row=2,column=5)
+        self.small_labels[6].grid(row=3,column=4)
+        self.mask_bottom_entry.grid(row=4,column=4)
+        self.small_labels[7].grid(row=3,column=5)
+        self.mask_rhs_entry.grid(row=4,column=5)
+
+        self.flip_vertical_check.grid(row=1, column=6)
+        self.flip_horizontal_check.grid(row=2, column=6)
+        self.rotate_90_check.grid(row=3, column=6)
+        self.rotate_270_check.grid(row=4, column=6)
+
+    def Bind_Events(self,*args):
+        self.graphical_chooser.crop_top_stringVar.trace('w',self.Update_From_Chooser)
+        self.graphical_chooser.crop_lhs_stringVar.trace('w', self.Update_From_Chooser)
+        self.graphical_chooser.crop_bottom_stringVar.trace('w', self.Update_From_Chooser)
+        self.graphical_chooser.crop_rhs_stringVar.trace('w', self.Update_From_Chooser)
+
+
+    def Launch_Graphical_Chooser(self):
+        self.graphical_chooser = Visual_Picker(self,self.img_path,self.orig_height, self.orig_width,self.flip_vertical_bool.get(),self.flip_horizontal_bool.get(), self.rotate_90_bool.get(), self.rotate_270_bool.get(),
+                                               [int(self.crop_lhs_stringVar.get()),
+                                                int(self.crop_top_stringVar.get()),
+                                                int(self.crop_bottom_stringVar.get()),
+                                                int(self.crop_rhs_stringVar.get()),])
+        self.Bind_Events()
+
+    def Update_From_Chooser(self,*args):
+        self.crop_top_stringVar.set(str(self.graphical_chooser.crop_top_stringVar.get()))
+        self.crop_lhs_stringVar.set(str(self.graphical_chooser.crop_lhs_stringVar.get()))
+        self.crop_bottom_stringVar.set(str(self.graphical_chooser.crop_bottom_stringVar.get()))
+        self.crop_rhs_stringVar.set(str(self.graphical_chooser.crop_rhs_stringVar.get()))
+
+    def Load_Preview(self):
+        thumbnail_width = 200
+        self.img_path = os.path.join(self.directory,os.listdir(self.directory)[self.img_index])
+        image = Image.open(self.img_path)
+        self.orig_width, self.orig_height = image.size
+        thumbnail_height = int(self.orig_height * (thumbnail_width / self.orig_width))
+        image = image.resize((int(thumbnail_width), int(thumbnail_height)), Image.Resampling.LANCZOS)
+        self.image = ImageTk.PhotoImage(image)
+        self.thumbnail_canvas = tk.Canvas(self, width=thumbnail_width, height=thumbnail_height, bg='#C8C8C8')
+        self.thumbnail_canvas.create_image(thumbnail_width/2, thumbnail_height/2, image=self.image)
+        self.thumbnail_canvas.grid(row=1, column=1, rowspan=3)
+        if len(self.defaults) == 4:
+            self.crop_lhs_stringVar.set(str(self.defaults[0]))
+            self.crop_top_stringVar.set(str(self.defaults[1]))
+            self.crop_bottom_stringVar.set(str(self.defaults[2]))
+            self.crop_rhs_stringVar.set(str(self.defaults[3]))
+        else:
+            self.crop_lhs_stringVar.set(str(0))
+            self.crop_top_stringVar.set(str(0))
+            self.crop_bottom_stringVar.set(str(self.orig_height))
+            self.crop_rhs_stringVar.set(str(self.orig_width))
+
+    def Update_Preview(self):
+        thumbnail_width = 300
+        image = Image.open(self.img_path)
+        if self.flip_vertical_bool.get():
+            image = image.transpose(Image.FLIP_TOP_BOTTOM)
+        if self.flip_horizontal_bool.get():
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+        if self.rotate_90_bool.get():
+            image = image.transpose(Image.ROTATE_90)
+        if self.rotate_270_bool.get():
+            image = image.transpose(Image.ROTATE_270)
+        thumbnail_height = int((int(self.crop_bottom_stringVar.get())-int(self.crop_top_stringVar.get())) * (thumbnail_width / (int(self.crop_rhs_stringVar.get())-int(self.crop_lhs_stringVar.get()))))
+        image = image.crop((int(self.crop_lhs_stringVar.get()),int(self.crop_top_stringVar.get()), int(self.crop_rhs_stringVar.get()), int(self.crop_bottom_stringVar.get())))
+        image = image.resize((int(thumbnail_width), int(thumbnail_height)), Image.Resampling.LANCZOS)
+
+        self.image_final = ImageTk.PhotoImage(image)
+        self.thumbnail_canvas_final = tk.Canvas(self, width=thumbnail_width, height=thumbnail_height, bg='#C8C8C8')
+        self.thumbnail_canvas_final.create_image(thumbnail_width/2, thumbnail_height/2, image=self.image_final)
+        self.thumbnail_canvas_final.grid(row=1, column=7, rowspan=8)
+
+class   Geometric_Transforms_Frame(tk.Frame):
     def __init__(self, master):
-        self.master = master
-        self.frame = tk.Frame(self.master)
+        super().__init__(master)
+
+    def Make_Geometry_Transforms(self):
+        bools = [app.mainframe.import_frame.port_main.check_bool.get(),
+                 app.mainframe.import_frame.stb_main.check_bool.get(),
+                 app.mainframe.import_frame.port_jib.check_bool.get(),
+                 app.mainframe.import_frame.stb_jib.check_bool.get()]
+
+        paths = [app.mainframe.import_frame.port_main_path_final_stringVar.get(),
+                 app.mainframe.import_frame.stb_main_path_final_stringVar.get(),
+                 app.mainframe.import_frame.port_jib_path_final_stringVar.get(),
+                 app.mainframe.import_frame.stb_jib_path_final_stringVar.get()]
+
+        sails = ['Port Main', 'Stb Main', 'Port Jib', 'Stb Jib']
+
+        defaults = [[112,1003,1476,2508],[112,1003,1476,2508],[112,1003,1476,2508],[112,1003,1476,2508]]
+
+        self.geometric_properties_list = []
+
+        for i in range(len(bools)):
+            if bools[i]:
+                sail = Sail_Geometric_Properties(self,os.path.join(os.path.dirname(paths[i]),'jpg'),sails[i],defaults[i])
+                sail.grid(row=i, column=0)
+                self.geometric_properties_list.append(sail)
 
 class   Autoscan_Frame:
     def __init__(self, master):
@@ -1124,8 +1797,6 @@ class Notebook(ttk.Notebook):
         super().__init__(master)
 
         self.Make_Notebook()
-
-
         self.Generate_Gloabl_Variables(parent=self,
                                        port_main_default=True,
                                        stb_main_default=True,
@@ -1140,7 +1811,7 @@ class Notebook(ttk.Notebook):
         self.import_frame=ImportFrame(self)
         self.data_cleaning=Data_Cleaning_Frame(self)
         self.filter_frame=Filter_Frame(self)
-        #self.frame4=Geometric_Transforms_Frame(self.notebook)
+        self.geometric_transfor_frame=Geometric_Transforms_Frame(self)
         #self.frame5=Autoscan_Frame(self.notebook)
         #self.frame6=Results_cleaning_Frame(self.notebook)
         #self.frame7=Reporting_Frame(self.notebook)
@@ -1148,7 +1819,7 @@ class Notebook(ttk.Notebook):
         self.add(self.import_frame, text='Import')
         self.add(self.data_cleaning,text='Data Cleaning')
         self.add(self.filter_frame,text='Filter' )
-        #self.add(self.frame4,text='Geometric Transforms')
+        self.add(self.geometric_transfor_frame,text='Geometric Transforms')
         #self.add(self.frame5,text='Autoscan')
         #self.notebook.add(self.frame6,text='Results Cleaning')
         #self.notebook.add(self.frame7,text='Results Cleaning')
@@ -1158,10 +1829,11 @@ class Notebook(ttk.Notebook):
 
     def OnNotebookTabChanged(self, *args):
         self.data_cleaning.topFrame.Update_From_Import()
-        self.data_cleaning.topFrame.On_Load_Log()
+        #self.data_cleaning.topFrame.On_Load_Log()
         self.data_cleaning.midFrame.Update_From_Import()
-        self.data_cleaning.midFrame.On_Load_Event()
+        #self.data_cleaning.midFrame.On_Load_Event()
         self.filter_frame.Update_From_Import()
+        self.geometric_transfor_frame.Make_Geometry_Transforms()
 
     def Generate_Gloabl_Variables(self,parent, port_main_default, stb_main_default, port_jib_default, stb_jib_default, log_default, event_default, project_default, root_default):
         self.port_main_check_bool = tk.BooleanVar(parent)
