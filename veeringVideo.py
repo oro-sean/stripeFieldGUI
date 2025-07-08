@@ -178,7 +178,7 @@ class Rename_GP_TimeLapse:
     def __init__(self,file,timeZone,timeStep):
         self.file = file
         self.timeZone = datetime.timedelta(hours=int(timeZone))
-        self.timeStep = timeStep
+        self.timeStep = int(timeStep)
         file, extension = os.path.splitext(self.file)
         self.extension = extension
 
@@ -186,7 +186,7 @@ class Rename_GP_TimeLapse:
         metaData = ffmpeg.probe(self.file)
         startTime = datetime.datetime.strptime(metaData['streams'][0]['tags']['creation_time'], '%Y-%m-%dT%H:%M:%S.%fZ')
         frames = metaData['streams'][0]['nb_frames']
-        runTime = datetime.timedelta(seconds=int(frames)*2)
+        runTime = datetime.timedelta(seconds=int(frames)*self.timeStep)
         self.finishTime = startTime + runTime + self.timeZone
 
     def Change_File_Name(self):

@@ -552,14 +552,15 @@ class   ImportFrame(tk.Frame):
         try:
             if sources[source][3] == 'EXIF':
                 existingFileName = sources[source][0].split('/')[-1]
-                newPath = os.path.join(self.header_frame.project_dir_stringVar.get(),folderNames[source], existingFileName)
-                shutil.copy(sources[source][0], newPath)
-                try:
-                    veeringVideo.Rename_GP_TimeLapse(newPath,sources[source][1],sources[source][2]).Rename()
-                    return newPath
-                except Exception as e:
-                    logging.error(e)
-                    logging.error("Veering Rename Go Pro failed on"+str(sources[source][0]))
+                if existingFileName != "No File Selected":
+                    newPath = os.path.join(self.header_frame.project_dir_stringVar.get(),folderNames[source], existingFileName)
+                    shutil.copy(sources[source][0], newPath)
+                    try:
+                        veeringVideo.Rename_GP_TimeLapse(newPath,sources[source][1],sources[source][2]).Rename()
+                        return newPath
+                    except Exception as e:
+                        logging.error(e)
+                        logging.error("Veering Rename Go Pro failed on"+str(sources[source][0]))
             else:
                 try:
                     newPath = os.path.join(self.header_frame.project_dir_stringVar.get(), folderNames[source], sources[source][4]+"_"+str(sources[source][2])+".mp4")
