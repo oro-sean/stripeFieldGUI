@@ -9,9 +9,13 @@ import shutil
 from tkinter.constants import ACTIVE
 from PIL import Image
 from PIL import ImageTk
+import numpy as np
+import h5py
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import veeringVideo
 import veeringLogs
+import veeringCV
 
 logging.basicConfig(filename='stripeField.log', encoding='utf-8', level=logging.DEBUG)
 logging.info('Veering Image Loader Opened')
@@ -1003,6 +1007,7 @@ class   Data_Cleaning_Side:
 
         ## define Buttons
         self.add_event_times_button = self.add_event_button = tk.Button(self.frame, width=8, text="Add Events", font='none 12 bold', command=self.On_Add_Times)
+        self.export_csv_button = tk.Button(self.frame, width=8, text="Export Logs as CSV", font='none 12 bold', command=self.On_Export_Logs_CSV)
 
         ## define labels
         self.race_timer_label = tk.Label(self.frame, text="Race Timer = 0", font='none 12 bold')
@@ -1011,9 +1016,10 @@ class   Data_Cleaning_Side:
         self.race_timer_listbox = tk.Listbox(self.frame, height=10, width=22, font='none 12 bold')
 
         ## grid
-        self.race_timer_label.grid(row=0, column=0, padx=5, pady=5, columnspan=3)
-        self.race_timer_listbox.grid(row=1, column=0, padx=5, pady=5, columnspan=3, rowspan=5)
-        self.add_event_button.grid(row=7, column=0, padx=5, pady=5)
+        self.export_csv_button.grid(row=0, column=0, padx=10, pady=10, columnspan=3, rowspan=2)
+        self.race_timer_label.grid(row=2, column=0, padx=5, pady=5, columnspan=3)
+        self.race_timer_listbox.grid(row=3, column=0, padx=5, pady=5, columnspan=3, rowspan=5)
+        self.add_event_button.grid(row=8, column=0, padx=5, pady=5)
 
         ## define class functions
     def Update_List(self):
@@ -1023,6 +1029,18 @@ class   Data_Cleaning_Side:
 
     def On_Add_Times(self):
         print('add_event_times')
+
+    def On_Export_Logs_CSV(self):
+        print('On_Export_Logs_CSV')
+        if app.mainframe.filter_frame.logs_exported_bool.get():
+            path, file = os.path.split(app.mainframe.data_cleaning.topFrame.log_path_stringVar.get())
+            exp_path = os.path.join(path,"log_clean.csv")
+            app.mainframe.data_cleaning.topFrame.exp_log.log_df.to_csv(exp_path, index=False, encoding='utf-8', sep=',')
+
+        if app.mainframe.filter_frame.phases_exported_bool.get():
+            path, file = os.path.split(app.mainframe.data_cleaning.midFrame.event_path_stringVar.get())
+            exp_path = os.path.join(path, "event_clean.csv")
+            app.mainframe.data_cleaning.midFrame.eventFile.events_df.to_csv(exp_path, index=False, encoding='utf-8', sep=',')
 
 class   Data_Cleaning_Frame(tk.Frame):
     def __init__(self, master):
@@ -1592,13 +1610,14 @@ class   Visual_Picker(tk.Toplevel):
         self.crop_rhs_stringVar.set(str(int(self.bottom_scale.get()/self.scale)))
 
 class   Sail_Geometric_Properties(tk.Frame):
-    def __init__(self, master,imgDir,sail,defaults):
+    def __init__(self, master,imgDir,sail,defaults, flip_rot):
         super().__init__(master)
 
         ## definevars
         self.img_index = 0
         self.directory = imgDir
         self.defaults = defaults
+        self.flip_rot = flip_rot
 
         ## define bools
         self.flip_horizontal_bool = tk.BooleanVar()
@@ -1731,6 +1750,12 @@ class   Sail_Geometric_Properties(tk.Frame):
             self.crop_bottom_stringVar.set(str(self.orig_height))
             self.crop_rhs_stringVar.set(str(self.orig_width))
 
+        if len(self.flip_rot) == 4:
+            self.flip_vertical_bool.set(self.flip_rot[0])
+            self.flip_horizontal_bool.set(self.flip_rot[1])
+            self.rotate_90_bool.set(self.flip_rot[2])
+            self.rotate_270_bool.set(self.flip_rot[3])
+
     def Update_Preview(self):
         thumbnail_width = 300
         image = Image.open(self.img_path)
@@ -1755,33 +1780,404 @@ class   Geometric_Transforms_Frame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
 
+        self.load_and_process_button = tk.Button(self, text="Load to .H5", command=self.On_Load_Button)
+
     def Make_Geometry_Transforms(self):
-        bools = [app.mainframe.import_frame.port_main.check_bool.get(),
+        self.bools = [app.mainframe.import_frame.port_main.check_bool.get(),
                  app.mainframe.import_frame.stb_main.check_bool.get(),
                  app.mainframe.import_frame.port_jib.check_bool.get(),
                  app.mainframe.import_frame.stb_jib.check_bool.get()]
 
-        paths = [app.mainframe.import_frame.port_main_path_final_stringVar.get(),
+        self.paths = [app.mainframe.import_frame.port_main_path_final_stringVar.get(),
                  app.mainframe.import_frame.stb_main_path_final_stringVar.get(),
                  app.mainframe.import_frame.port_jib_path_final_stringVar.get(),
                  app.mainframe.import_frame.stb_jib_path_final_stringVar.get()]
 
-        sails = ['Port Main', 'Stb Main', 'Port Jib', 'Stb Jib']
+        self.sails = ['Port Main', 'Stb Main', 'Port Jib', 'Stb Jib']
 
-        defaults = [[112,1003,1476,2508],[112,1003,1476,2508],[112,1003,1476,2508],[112,1003,1476,2508]]
+        defaults_crop = [[790,1200,2345,4290],[790,1200,2345,4290],[675,990,1660,2715],[675,990,1660,2715]]
+        defaults_flip_rot = [[False,False,False,False],[False,False,False,False],[False,False,False,False],[True,False,False,False]]
 
         self.geometric_properties_list = []
 
-        for i in range(len(bools)):
-            if bools[i]:
-                sail = Sail_Geometric_Properties(self,os.path.join(os.path.dirname(paths[i]),'jpg'),sails[i],defaults[i])
+        for i in range(len(self.bools)):
+            if self.bools[i]:
+                sail = Sail_Geometric_Properties(self,os.path.join(os.path.dirname(self.paths[i]),'jpg'),self.sails[i],defaults_crop[i],defaults_flip_rot[i])
                 sail.grid(row=i, column=0)
+                if len(self.paths[i]) > 0:
+                    sail.Load_Preview()
+                    sail.Update_Preview()
                 self.geometric_properties_list.append(sail)
 
-class   Autoscan_Frame:
+        self.load_and_process_button.grid(row=i+1, column=0, padx=10, pady=10)
+
+    def Load_to_Array(self,file_path,crops):
+        time_stamps = []
+        file_names = os.listdir(file_path)
+        file_names = [file for file in file_names if '.jpg' in file]
+
+        for i in range(len(file_names)):
+            file_name = file_names[i]
+            img_path = os.path.join(file_path, file_name)
+
+            try:
+                image = Image.open(img_path)
+                print("processing " + str(i) + " of " + str(len(file_names)))
+
+                ts = image.getexif()[306]
+                time_stamps.append(ts)
+                image = image.crop(crops)
+
+                if i == 0:
+                    w, h = image.size
+                    img_array = np.zeros((h, w, 3, len(file_names)), dtype='float32')
+
+                img_array[:, :, :, i] = np.array(image)
+
+            except Exception as e:
+                logging.error(e)
+                logging.error('failed to load image in for loop - ' + str(img_path))
+
+        self.image_array = img_array
+        self.time_stamps = time_stamps
+
+    def Load_and_Process(self, exp_dir,sail):
+        try:
+            exp_path = os.path.join(exp_dir, str(sail)+".h5")
+            hf = h5py.File(exp_path, 'w')
+            hf.create_dataset('IMG_ARRAY', data=self.image_array)
+            hf.create_dataset('TIME_STAMPS', data=self.time_stamps)
+            hf.close()
+        except Exception as e:
+            logging.error(e)
+            logging.error("Failed to load and process")
+
+    def On_Load_Button(self):
+        for i in range(len(self.bools)):
+            if self.bools[i]:
+                head, tail = os.path.split(self.paths[i])
+                file_path = os.path.join(head,"jpg")
+
+                crops = [int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_lhs_stringVar.get()),
+                            int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_top_stringVar.get()),
+                            int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_rhs_stringVar.get()),
+                            int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_bottom_stringVar.get())]
+
+                self.Load_to_Array(file_path, crops)
+                file_path = head
+                self.Load_and_Process(file_path,self.sails[i])
+
+class   Graph_Popup(tk.Toplevel):
+    def __init__(self, master, title, fig,type, source):
+        super().__init__(master)
+        self.title = title
+        self.type = type
+        self.source = int(source)
+        self.close_button = tk.Button(self, text="Close", command=self.destroy)
+        self.close_button.grid(row=0, column=0, padx=10, pady=10)
+        if self.type == "search":
+            stringVars = [app.mainframe.autoscan_parent.pages[self.source].threshold_search_min_stringVar,
+                          app.mainframe.autoscan_parent.pages[self.source].threshold_search_max_stringVar,
+                          app.mainframe.autoscan_parent.pages[self.source].threshold_search_increment_stringVar]
+
+            entry_widgets = []
+            for i in range(3):
+                entry = tk.Entry(self, textvariable=stringVars[i], width=5)
+                entry.grid(row=1, column=i)
+                entry_widgets.append(entry)
+
+
+
+        canvas = FigureCanvasTkAgg(fig, master=self)
+        self.canvas_widget = canvas.get_tk_widget()
+        self.canvas_widget.grid(row=2, column=0, sticky='nsew')
+
+
+
+class   Autoscan_Frame(tk.Frame):
+    def __init__(self, master, path, index):
+        super().__init__(master)
+
+        self.index_stringVar = tk.StringVar()
+        self.index_stringVar.set(index)
+        self.path_to_h5_stringVar = tk.StringVar()
+        self.path_to_h5_stringVar.set(path)
+        self.stripe_count_stringVar = tk.StringVar()
+        self.stripe_count_stringVar.set("")
+        self.threshold_offset_stringVar = tk.StringVar()
+        self.threshold_offset_stringVar.set("")
+        self.red_orig_stringVar = tk.StringVar()
+        self.red_orig_stringVar.set("256")
+        self.green_orig_stringVar = tk.StringVar()
+        self.green_orig_stringVar.set("165")
+        self.blue_orig_stringVar = tk.StringVar()
+        self.blue_orig_stringVar.set("130")
+        self.count_filter_lower_stringVar = tk.StringVar()
+        self.count_filter_lower_stringVar.set("0.1")
+        self.count_filter_upper_stringVar = tk.StringVar()
+        self.count_filter_upper_stringVar.set("0.9")
+        self.set_eps_mult_stringVar = tk.StringVar()
+        self.set_eps_mult_stringVar.set("0.005")
+        self.set_min_mult_stringVar = tk.StringVar()
+        self.set_min_mult_stringVar.set("0.001")
+        self.pic_eps_mult_stringVar = tk.StringVar()
+        self.pic_eps_mult_stringVar.set("0.005")
+        self.pic_min_mult_stringVar = tk.StringVar()
+        self.pic_min_mult_stringVar.set("0.001")
+        self.cluster_offset_stringVar = tk.StringVar()
+        self.cluster_offset_stringVar.set("")
+        self.pic_db_samples_stringVar = tk.StringVar()
+        self.pic_db_samples_stringVar.set("10")
+        self.threshold_search_min_stringVar = tk.StringVar()
+        self.threshold_search_min_stringVar.set("175")
+        self.threshold_search_max_stringVar = tk.StringVar()
+        self.threshold_search_max_stringVar.set("200")
+        self.threshold_search_increment_stringVar = tk.StringVar()
+        self.threshold_search_increment_stringVar.set("5")
+
+        self.norm_1_bool = tk.BooleanVar()
+        self.norm_1_bool.set(True)
+        self.norm_2_bool = tk.BooleanVar()
+        self.norm_2_bool.set(False)
+        self.norm_3_bool = tk.BooleanVar()
+        self.norm_3_bool.set(True)
+        self.pdf_bool = tk.BooleanVar()
+        self.pdf_bool.set(False)
+        self.jpg_bool = tk.BooleanVar()
+        self.jpg_bool.set(True)
+        self.sql_bool = tk.BooleanVar()
+        self.sql_bool.set(True)
+        self.generate_pixcels_run_bool = tk.BooleanVar()
+        self.generate_pixcels_run_bool.set(False)
+
+        self.path_to_h5_label = tk.Label(self, textvariable=self.path_to_h5_stringVar, font='none 10')
+        self.path_to_h5_label.configure(wraplength=150)
+        self.red_orig_label = tk.Label(self, text="Target Colour Red - ", font='none 12')
+        self.green_orig_label = tk.Label(self, text="Target Colour Green - ", font='none 12')
+        self.blue_orig_label = tk.Label(self, text="Target Colour Blue - ", font='none 12')
+        self.header_label = tk.Label(self, text="AutoScan Hyperparameters", font='Bold 14')
+        self.stripe_count_label = tk.Label(self, text="Stripe Count - ", font='none 12')
+        self.threshold_offset_label = tk.Label(self, text="Threshold Offset - ", font='none 12')
+        self.lower_count_label = tk.Label(self, text="Lower Count Filter - ", font='none 12')
+        self.upper_count_label = tk.Label(self, text="Upper Count - ", font='none 12')
+        self.set_eps_mult_label = tk.Label(self, text="Set Eps Multiplier - ", font='none 12')
+        self.set_min_mult_label = tk.Label(self, text="Set Min Multiplier - ", font='none 12')
+        self.cluster_offset_label = tk.Label(self, text="Cluster Offset - ", font='none 12')
+        self.pic_eps_mult_label = tk.Label(self, text="Pic Eps Multiplier - ", font='none 12')
+        self.pic_min_mult_label = tk.Label(self, text="Pic Min Multiplier - ", font='none 12')
+        self.pic_db_samples_label = tk.Label(self, text="# Samples for pic DB Scan - ", font='none 12')
+        self.file_info_label = tk.Label(self, text="File Info ", font='bold 12')
+        self.colour_label = tk.Label(self, text="Colour and Normalisation ", font='bold 12')
+        self.threshold_label = tk.Label(self, text="Thresholding ", font='bold 12')
+        self.dbScan_label = tk.Label(self, text="DB Scan and PCA", font='bold 12')
+
+        self.h5_chooser_button = tk.Button(self, text="Select .H5 File", command=self.Open_H5_File)
+        self.load_h5_button = tk.Button(self, text="Load .H5 File", command=self.Load_H5_File)
+        self.run_all_button = tk.Button(self, text="Run All", command=self.Run_All)
+        self.threshold_graph_button = tk.Button(self, text="Threshold Graph", command=self.Threshold_Graph)
+        self.offset_sweep_button = tk.Button(self, text="Offset Sweep", command=self.Open_Offset_Sweep)
+        self.count_cleaning_graphs_button = tk.Button(self, text="Count Cleaning Graphs", command=self.Count_Cleaning_Graphs)
+        self.generate_pixcels_button = tk.Button(self, text="Generate Pixcels", command=self.Generate_pixcels)
+        self.check_set_dbScan_button = tk.Button(self, text="Check Set DB Scan", command=self.Check_Set_DBScan)
+        self.set_dbScan_button = tk.Button(self, text="Run DB Scan on Set", command=self.SetDBScan)
+        self.check_pic_dbScan_button = tk.Button(self, text="Check PIC DB Scan", command=self.Check_Pic_DBScan)
+        self.pic_dbScan_button = tk.Button(self, text="Run DB Scan on Pics", command=self.Run_Pic_DBScan)
+        self.fit_splines_calc_button = tk.Button(self, text="Fit Splines and Calculate Properties", command=self.Fit_Splines_Calc_Properties)
+        self.export_button = tk.Button(self, text="Export Results", command=self.Export_Results)
+        self.sql_button = tk.Button(self, text="Enter SQL Credentials", command=self.Enter_SQL_Credentials)
+
+        self.stripe_count_combo = ttk.Combobox(self, textvariable=self.stripe_count_stringVar, width=5)
+        self.stripe_count_combo['values'] = [2, 3, 4, 5]
+        self.stripe_count_combo.state(["readonly"])
+        self.stripe_count_combo.current(2)
+
+
+        self.threshold_offset_combo = ttk.Combobox(self, textvariable=self.threshold_offset_stringVar, width=5)
+        self.threshold_offset_combo['values'] = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3]
+        self.threshold_offset_combo.state(["readonly"])
+        self.threshold_offset_combo.current(6)
+
+        self.cluster_offset_combo = ttk.Combobox(self, textvariable=self.cluster_offset_stringVar, width=5)
+        self.cluster_offset_combo['values'] = [-6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6]
+        self.cluster_offset_combo.state(["readonly"])
+        self.cluster_offset_combo.current(6)
+
+        self.norm_1_check = tk.Checkbutton(self, text="Length Normalisation", variable=self.norm_1_bool, onvalue=True, offvalue=False)
+        self.norm_2_check = tk.Checkbutton(self, text="Colour Normalisation", variable=self.norm_2_bool, onvalue=True, offvalue=False)
+        self.norm_3_check = tk.Checkbutton(self, text="RGB Chrom Normalisation", variable=self.norm_3_bool, onvalue=True, offvalue=False)
+        self.pdf_check= tk.Checkbutton(self, text="PDF", variable=self.pdf_bool, onvalue=True, offvalue=False)
+        self.jpg_check = tk.Checkbutton(self, text="JPG", variable=self.jpg_bool, onvalue=True, offvalue=False)
+        self.sql_check = tk.Checkbutton(self, text="SQL", variable=self.sql_bool, onvalue=True, offvalue=False)
+
+        self.red_orig_entry = tk.Entry(self, textvariable=self.red_orig_stringVar, width=5)
+        self.green_orig_entry = tk.Entry(self, textvariable=self.green_orig_stringVar, width=5)
+        self.blue_orig_entry = tk.Entry(self, textvariable=self.blue_orig_stringVar, width=5)
+        self.count_filter_lower_entry = tk.Entry(self, textvariable=self.count_filter_lower_stringVar, width=5)
+        self.count_filter_upper_entry = tk.Entry(self, textvariable=self.count_filter_upper_stringVar, width=5)
+        self.set_eps_mult_entry = tk.Entry(self, textvariable=self.set_eps_mult_stringVar, width=5)
+        self.set_min_mult_entry = tk.Entry(self, textvariable=self.set_min_mult_stringVar, width=5)
+        self.pic_eps_mult_entry = tk.Entry(self, textvariable=self.pic_eps_mult_stringVar, width=5)
+        self.pic_min_mult_entry = tk.Entry(self, textvariable=self.pic_min_mult_stringVar, width=5)
+        self.pic_db_samples_entry = tk.Entry(self, textvariable=self.pic_db_samples_stringVar, width=5)
+
+        self.path_to_h5_label.grid(row=2, column=0)
+        self.h5_chooser_button.grid(row=2, column=1, padx=5)
+        self.load_h5_button.grid(row=2, column=2, padx=5, sticky=tk.W)
+        self.stripe_count_label.grid(row=2, column=2, sticky=tk.E)
+        self.stripe_count_combo.grid(row=2, column=3, sticky=tk.W)
+        self.run_all_button.grid(row=2, column=4)
+        self.colour_label.grid(row=3, column=0, columnspan=4, padx=10, pady=5)
+        self.red_orig_label.grid(row=4, column=0, sticky=tk.E)
+        self.red_orig_entry.grid(row=4, column=1, sticky=tk.W)
+        self.norm_1_check.grid(row=4, column=2)
+        self.green_orig_label.grid(row=5, column=0, sticky=tk.E)
+        self.green_orig_entry.grid(row=5, column=1, sticky=tk.W)
+        self.norm_2_check.grid(row=5, column=2)
+        self.blue_orig_label.grid(row=6, column=0, sticky=tk.E)
+        self.blue_orig_entry.grid(row=6, column=1, sticky=tk.W)
+        self.norm_3_check.grid(row=6, column=2)
+        self.threshold_label.grid(row=7, column=0, columnspan=4, padx=10, pady=5)
+        self.threshold_offset_label.grid(row=8, column=0, sticky=tk.E)
+        self.threshold_offset_combo.grid(row=8, column=1, sticky=tk.W)
+        self.threshold_graph_button.grid(row=8, column=2)
+        self.lower_count_label.grid(row=9, column=0, sticky=tk.E)
+        self.count_filter_lower_entry.grid(row=9, column=1, sticky=tk.W)
+        self.offset_sweep_button.grid(row=9, column=2, rowspan=2)
+        self.upper_count_label.grid(row=10, column=0, sticky=tk.E)
+        self.count_filter_upper_entry.grid(row=10, column=1, sticky=tk.W)
+        self.count_cleaning_graphs_button.grid(row=10, column=2, rowspan=2)
+        self.generate_pixcels_button.grid(row=11, column=1, padx=15, pady=10)
+        self.dbScan_label.grid(row=12, column=0, columnspan=4, padx=10, pady=5)
+        self.set_eps_mult_label.grid(row=13, column=0, sticky=tk.E)
+        self.set_eps_mult_entry.grid(row=13, column=1, sticky=tk.W)
+        self.set_min_mult_label.grid(row=14, column=0, sticky=tk.E)
+        self.set_min_mult_entry.grid(row=14, column=1, sticky=tk.W)
+        self.cluster_offset_label.grid(row=15, column=0, sticky=tk.E)
+        self.cluster_offset_combo.grid(row=15, column=1, sticky=tk.W)
+        self.check_set_dbScan_button.grid(row=15, column=2)
+        self.set_dbScan_button.grid(row=16, column=1, padx=15, pady=10)
+        self.pic_eps_mult_label.grid(row=17, column=0, sticky=tk.E)
+        self.pic_eps_mult_entry.grid(row=17, column=1, sticky=tk.W)
+        self.pic_db_samples_label.grid(row=17, column=2, sticky=tk.E)
+        self.pic_db_samples_entry.grid(row=17, column=3, sticky=tk.W)
+        self.pic_min_mult_label.grid(row=18, column=0, sticky=tk.E)
+        self.pic_min_mult_entry.grid(row=18, column=1, sticky=tk.W)
+        self.check_pic_dbScan_button.grid(row=18, column=2)
+        self.pic_dbScan_button.grid(row=19, column=1, padx=15, pady=10)
+        self.fit_splines_calc_button.grid(row=20, column=1, padx=15, pady=10)
+        self.pdf_check.grid(row=21, column=0)
+        self.jpg_check.grid(row=21, column=1)
+        self.sql_check.grid(row=21, column=2)
+        self.sql_button.grid(row=21, column=3)
+        self.export_button.grid(row=22, column=1, padx=15, pady=10)
+
+    def Make_Plot(self,fig,gridPos, gridSpan):
+        canvas = FigureCanvasTkAgg(fig, master=self)
+        self.canvas_widget = canvas.get_tk_widget()
+        self.canvas_widget.grid(row=gridPos[0], column=gridPos[1], rowspan=gridSpan[0], columnspan=gridSpan[1],  sticky='nsew')
+
+    def Open_H5_File(self):
+        self.path_to_h5_stringVar.set(tk.filedialog.askopenfilename(initialdir=self.path_to_h5_stringVar.get()))
+
+    def Load_H5_File(self):
+        normalisations = []
+        if self.norm_1_bool.get():
+            normalisations.append(1)
+        if self.norm_2_bool.get():
+            normalisations.append(2)
+        if self.norm_3_bool.get():
+            normalisations.append(3)
+        self.features = veeringCV.VeeringNormalisation(self.path_to_h5_stringVar.get())
+        self.features.RunNormalisation(normalisations)
+        print("H5 files loaded and normalised")
+
+    def Run_All(self):
+        print("Running All")
+        self.Load_H5_File()
+        self.Generate_pixcels()
+
+    def Threshold_Graph(self):
+        if self.generate_pixcels_run_bool.get() == False:
+            self.Generate_pixcels()
+        self.thresholds.Threshold_Graphs()
+        Graph_Popup(self,"Threshold Selection", self.thresholds.thesholdFigure, "search", self.index_stringVar.get())
+
+    def Open_Offset_Sweep(self):
+        targetColour = [int(self.red_orig_stringVar.get()), int(self.green_orig_stringVar.get()),
+                        int(self.blue_orig_stringVar.get())]
+        self.threshold_for_sweep = veeringCV.Thresholding(self.features.pixcels,targetColour,[int(self.threshold_search_min_stringVar.get()),int(self.threshold_search_max_stringVar.get()),int(self.threshold_search_increment_stringVar.get())])
+        self.threshold_for_sweep.Run_Thresholding()
+        self.threshold_for_sweep.Threshold_Sweep_Graphs([-6,-4,-2,0], self.features.origShape, self.features.pixcels)
+        Graph_Popup(self,"Threshold Sweep", self.threshold_for_sweep.thresh_offsetPlot, "sweep", self.index_stringVar.get())
+
+    def Count_Cleaning_Graphs(self):
+        self.thresholds.Cnt_Filter_Plot()
+        Graph_Popup(self,"Count Cleaning", self.thresholds.cnt_filterFig, "count", self.index_stringVar.get())
+
+    def Generate_pixcels(self):
+        targetColour = [int(self.red_orig_stringVar.get()), int(self.green_orig_stringVar.get()), int(self.blue_orig_stringVar.get())]
+        self.thresholds = veeringCV.Thresholding(self.features.pixcels,targetColour,[int(self.threshold_search_min_stringVar.get()),int(self.threshold_search_max_stringVar.get()),int(self.threshold_search_increment_stringVar.get())])
+        self.thresholds.Run_Thresholding()
+        self.thresholds.Generate_Stripe_Pixcels(int(self.threshold_offset_combo.get()),self.features.pixcels,self.features.origShape)
+        self.thresholds.Count_Filter(float(self.count_filter_lower_entry.get()),float(self.count_filter_upper_entry.get()))
+        self.thresholds.Stripes_Plot_Clean()
+        self.generate_pixcels_run_bool.set(True)
+        self.Make_Plot(self.thresholds.CNT_cleanPlot,[3,4],[6,6])
+        print(self.thresholds.threshold)
+
+    def SetDBScan(self):
+        print("Setting DB Scan")
+
+    def Check_Set_DBScan(self):
+        print("Checking DB Scan")
+
+    def Check_Pic_DBScan(self):
+        print("Checking Pic DB Scan")
+
+    def Run_Pic_DBScan(self):
+        print("Running Pic DB Scan")
+
+    def Fit_Splines_Calc_Properties(self):
+        print("Fitting Splines Calc Properties")
+
+    def Export_Results(self):
+        print("Exporting Results")
+
+    def Enter_SQL_Credentials(self):
+        print("Entering SQL Credentials")
+
+class   Autoscan_Parent(ttk.Notebook):
     def __init__(self, master):
-        self.master = master
-        self.frame = tk.Frame(self.master)
+        super().__init__(master)
+        self.pages_made = []
+        self.pages = []
+    def Make_Autoscan_NB(self):
+
+        self.bools = [app.mainframe.import_frame.port_main.check_bool.get(),
+                 app.mainframe.import_frame.stb_main.check_bool.get(),
+                 app.mainframe.import_frame.port_jib.check_bool.get(),
+                 app.mainframe.import_frame.stb_jib.check_bool.get()]
+
+        self.paths = [app.mainframe.import_frame.port_main_path_final_stringVar.get(),
+                 app.mainframe.import_frame.stb_main_path_final_stringVar.get(),
+                 app.mainframe.import_frame.port_jib_path_final_stringVar.get(),
+                 app.mainframe.import_frame.stb_jib_path_final_stringVar.get()]
+
+        self.sails = ['Port Main', 'Stb Main', 'Port Jib', 'Stb Jib']
+
+
+        for i in range(len(self.bools)):
+            if self.bools[i]:
+                if self.sails[i] not in self.pages_made:
+                    page = Autoscan_Frame(self, self.paths[i], i)
+                    self.add(page, text=self.sails[i])
+                    self.pages.append(page)
+                    self.pages_made.append(self.sails[i])
+
+                else:
+                    self.pages[i].path_to_h5_stringVar.set(self.paths[i])
+
+
 
 class   Results_cleaning_Frame:
     def __init__(self, master):
@@ -1813,7 +2209,7 @@ class Notebook(ttk.Notebook):
         self.data_cleaning=Data_Cleaning_Frame(self)
         self.filter_frame=Filter_Frame(self)
         self.geometric_transfor_frame=Geometric_Transforms_Frame(self)
-        #self.frame5=Autoscan_Frame(self.notebook)
+        self.autoscan_parent=Autoscan_Parent(self)
         #self.frame6=Results_cleaning_Frame(self.notebook)
         #self.frame7=Reporting_Frame(self.notebook)
 
@@ -1821,7 +2217,7 @@ class Notebook(ttk.Notebook):
         self.add(self.data_cleaning,text='Data Cleaning')
         self.add(self.filter_frame,text='Filter' )
         self.add(self.geometric_transfor_frame,text='Geometric Transforms')
-        #self.add(self.frame5,text='Autoscan')
+        self.add(self.autoscan_parent,text='Autoscan')
         #self.notebook.add(self.frame6,text='Results Cleaning')
         #self.notebook.add(self.frame7,text='Results Cleaning')
 
@@ -1835,6 +2231,8 @@ class Notebook(ttk.Notebook):
         #self.data_cleaning.midFrame.On_Load_Event()
         self.filter_frame.Update_From_Import()
         self.geometric_transfor_frame.Make_Geometry_Transforms()
+        self.autoscan_parent.Make_Autoscan_NB()
+
 
     def Generate_Gloabl_Variables(self,parent, port_main_default, stb_main_default, port_jib_default, stb_jib_default, log_default, event_default, project_default, root_default):
         self.port_main_check_bool = tk.BooleanVar(parent)
