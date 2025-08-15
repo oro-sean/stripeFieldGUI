@@ -925,6 +925,12 @@ class   Data_Cleaning_Top(tk.Frame):
         self.log_path_stringVar.set(app.mainframe.import_frame.log_path_final_stringVar.get())
         self.log_type_stringVar.set(app.mainframe.import_frame.log.log_type.get())
         self.log_timezone_stringVar.set(app.mainframe.import_frame.log.timezone.get())
+        if (len(app.mainframe.import_frame.log_path_final_stringVar.get()) > 0 and self.first_load_log == True):
+            print("Update Load log button")
+            self.load_log_button['default'] = "active"
+
+        else:
+            self.load_log_button['default'] = "normal"
 
     def Update_List_Box_1(self,*args):
         self.refinedVars_listbox.delete(0, tk.END)
@@ -977,6 +983,9 @@ class   Data_Cleaning_Top(tk.Frame):
                     for i in self.logVars_listbox.curselection():
                         current_selection.append(self.logVars_listbox.get(i))
                     self.Load_Log_Exp(current_selection)
+
+                self.load_log_button['default'] = "normal"
+                self.export_log_button['default'] = "active"
 
             except Exception as e:
                 logging.error(e)
@@ -1131,6 +1140,12 @@ class   Data_Cleaning_Mid(tk.Frame):
         self.event_path_stringVar.set(app.mainframe.import_frame.event_path_final_stringVar.get())
         self.event_type_stringVar.set(app.mainframe.import_frame.event.log_type.get())
         self.event_timezone_stringVar.set(app.mainframe.import_frame.event.timezone.get())
+        if (len(app.mainframe.import_frame.event_path_final_stringVar.get()) > 0 and self.first_load_event == True):
+            print("Update Load log button")
+            self.load_event_button['default'] = "active"
+
+        else:
+            self.load_event_button['default'] = "normal"
 
     def Load_Event_XML(self, presets):
         counter = 0
@@ -1171,6 +1186,9 @@ class   Data_Cleaning_Mid(tk.Frame):
                         current_selection.append(self.event_type_all_listbox.get(i))
                     self.Load_Event_XML(current_selection)
 
+                self.load_event_button['default'] = "normal"
+                self.export_event_button['default'] = "active"
+
             except Exception as e:
                 logging.error(e)
                 logging.error('Failed to load event')
@@ -1206,6 +1224,7 @@ class   Data_Cleaning_Mid(tk.Frame):
         except Exception as e:
             logging.error(e)
             logging.error('Failed to build event DF')
+
 
     def On_Add_Event(self):
         print("Event File Added")
@@ -1907,6 +1926,9 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.change_preview_ind_combo['values'] = [-100, -10, -1, 0, 1, 10, 100]
         self.change_preview_ind_combo.state(["readonly"])
 
+        ## create seperators
+        self.horiz_1 = ttk.Separator(self, orient=tk.HORIZONTAL)
+
         ## Grid
         self.sail_header_label.grid(column=0, row=0, padx=5, pady=5)
         self.preview_label.grid(column=1, row=0, padx=5, pady=5)
@@ -1945,6 +1967,8 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.image_count_label.grid(row=2, column=16, padx=5)
         self.image_height_label.grid(row=3, column=16, padx=5)
         self.image_width_label.grid(row=4, column=16, padx=5)
+
+        self.horiz_1.grid(row=5, column=0, columnspan=16, pady=2, sticky=tk.EW)
 
         ## bind events
         trace = self.change_preview_ind_intVar.trace_add('write',self.Update_From_Index)
@@ -2035,8 +2059,10 @@ class   Geometric_Transforms_Frame(tk.Frame):
 
         self.load_and_process_button = tk.Button(self, text="Load to .H5", command=self.On_Load_Button)
         self.load_and_process_button.config(default="active")
+        self.geometric_properties_list = ["Disabled", "Disabled", "Disabled", "Disabled"]
 
     def Make_Geometry_Transforms(self):
+
         self.bools = [app.mainframe.import_frame.port_main.check_bool.get(),
                  app.mainframe.import_frame.stb_main.check_bool.get(),
                  app.mainframe.import_frame.port_jib.check_bool.get(),
@@ -2052,16 +2078,32 @@ class   Geometric_Transforms_Frame(tk.Frame):
         defaults_crop = [[790,1200,2345,4290],[790,1200,2345,4290],[675,990,1660,2715],[675,990,1660,2715]]
         defaults_flip_rot = [[False,False,False,False],[False,False,False,False],[False,False,False,False],[True,False,False,False]]
 
-        self.geometric_properties_list = []
-
-        for i in range(len(self.bools)):
-            if self.bools[i]:
-                sail = Sail_Geometric_Properties(self,os.path.join(os.path.dirname(self.paths[i]),'jpg'),self.sails[i],defaults_crop[i],defaults_flip_rot[i])
+        for i in range(len(self.geometric_properties_list)):
+            if self.geometric_properties_list[i] == 'Disabled' and self.bools[i] == True:
+                sail = Sail_Geometric_Properties(self, os.path.join(os.path.dirname(self.paths[i]), 'jpg'),
+                                                 self.sails[i], defaults_crop[i], defaults_flip_rot[i])
                 sail.grid(row=i, column=0)
                 if len(self.paths[i]) > 0:
                     sail.Load_Preview()
                     sail.Update_Preview()
-                self.geometric_properties_list.append(sail)
+                self.geometric_properties_list[i] = sail
+
+            elif (self.geometric_properties_list[i] != 'Disabled' and self.bools[i] == False):
+                sail = self.geometric_properties_list[i]
+                sail.destroy()
+                self.geometric_properties_list[i] = "Disabled"
+
+            elif self.geometric_properties_list[i] != 'Disabled' and self.bools[i] == True:
+                sail = self.geometric_properties_list[i]
+                sail.destroy()
+                sail = Sail_Geometric_Properties(self, os.path.join(os.path.dirname(self.paths[i]), 'jpg'),
+                                                 self.sails[i], defaults_crop[i], defaults_flip_rot[i])
+                sail.grid(row=i, column=0)
+                if len(self.paths[i]) > 0:
+                    sail.Load_Preview()
+                    sail.Update_Preview()
+                self.geometric_properties_list[i] = sail
+
 
         self.load_and_process_button.grid(row=i+1, column=5, padx=10, pady=10)
 
@@ -2449,8 +2491,6 @@ class   Autoscan_Parent(ttk.Notebook):
 
                 else:
                     self.pages[i].path_to_h5_stringVar.set(self.paths[i])
-
-
 
 
 class   Results_cleaning_Frame:
