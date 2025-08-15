@@ -9,6 +9,7 @@ from scipy.spatial import distance
 from scipy.signal import find_peaks
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
+import logging
 
 class VeeringNormalisation:
     def __init__(self, filePath):
@@ -232,31 +233,48 @@ class Thresholding:
         self.eucledianDistances = np.linalg.norm(self.targetColour - self.threshPix, axis=1)
 
     def Calc_Threshold(self):
-        x_mean = []
-        y_mean = []
-        search = range(self.searchRange[0], self.searchRange[1], self.searchRange[2])
-        for x1 in search:
-            x_mean.append(x1)
-            y_mean.append(np.mean(self.eucledianDistances[np.where(self.eucledianDistances < x1)]))
+        try:
+            x_mean = []
+            y_mean = []
+            search = range(self.searchRange[0], self.searchRange[1], self.searchRange[2])
+            for x1 in search:
+                x_mean.append(x1)
+                y_mean.append(np.mean(self.eucledianDistances[np.where(self.eucledianDistances < x1)]))
 
-        opt_mean = x_mean[find_peaks(np.gradient(y_mean)*-1)[0][0]]
+            opt_mean = x_mean[find_peaks(np.gradient(y_mean)*-1)[0][0]]
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to calculate opt_mean do to ')
+            print(e)
+            opt_mean = (self.searchRange[0]+self.searchRange[1])/2
+        try:
+            x_std = []
+            y_std = []
+            for x1 in search:
+                x_std.append(x1)
+                y_std.append(np.std(self.eucledianDistances[np.where(self.eucledianDistances < x1)]))
 
-        x_std = []
-        y_std = []
-        for x1 in search:
-            x_std.append(x1)
-            y_std.append(np.std(self.eucledianDistances[np.where(self.eucledianDistances < x1)]))
+            opt_std = x_std[find_peaks(np.gradient(np.gradient(y_std)))[0][0]]
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to calculate opt_std do to ')
+            print(e)
+            opt_std = (self.searchRange[0]+self.searchRange[1])/2
 
-        opt_std = x_std[find_peaks(np.gradient(np.gradient(y_std)))[0][0]]
+        try:
+            x_count = []
+            y_count = []
+            eucledianDistances = np.reshape(self.eucledianDistances, (-1,self.originalShape[2]))
+            for x1 in search:
+                x_count.append(x1)
+                y_count.append((np.std(np.unique(np.where(eucledianDistances< x1)[1], return_counts=True)[1])))
 
-        x_count = []
-        y_count = []
-        eucledianDistances = np.reshape(self.eucledianDistances, (-1,self.originalShape[2]))
-        for x1 in search:
-            x_count.append(x1)
-            y_count.append((np.std(np.unique(np.where(eucledianDistances< x1)[1], return_counts=True)[1])))
-
-        opt_count = x_count[find_peaks(np.gradient(y_count)*-1)[0][0]]
+            opt_count = x_count[find_peaks(np.gradient(y_count)*-1)[0][0]]
+        except Exception as e:
+            logging.error(e)
+            logging.error('Failed to calculate opt_count do to ')
+            print(e)
+            opt_count = (self.searchRange[0]+self.searchRange[1])/2
 
         self.threshold = int(np.mean([opt_mean,opt_std,opt_count]))
         self.graphStats = [x_mean,y_mean, opt_mean, x_std,y_std, opt_std, x_count,y_count, opt_count]

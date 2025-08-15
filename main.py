@@ -1,12 +1,16 @@
 import os
 import tkinter as tk
 from doctest import master
-from tkinter import filedialog, StringVar
+from tkinter import filedialog, StringVar, messagebox
 from tkinter import ttk
 import logging
 import datetime
 import shutil
 from tkinter.constants import ACTIVE
+from wsgiref.validate import check_status
+import threading
+import queue
+
 from PIL import Image
 from PIL import ImageTk
 import numpy as np
@@ -24,7 +28,8 @@ class   Make_Project_Directory_Window(tk.Toplevel):
     def __init__(self,master):
         super().__init__(master)
         self.title("Make Project Directory")
-        self.geometry("600x350")
+        self.geometry("575x350")
+        self.config(borderwidth=2)
 
         ## define boolean variables
         self.port_main_check_bool = tk.BooleanVar()
@@ -53,78 +58,95 @@ class   Make_Project_Directory_Window(tk.Toplevel):
         self.project_dir_stringVar = tk.StringVar()
 
         ## define buttons
-        self.close_button = tk.Button(self, text="Close", command=self.destroy)
-        self.create_directory_button = tk.Button(self, text="Create Directory", command=self.Create_Directory)
-        self.select_root_dir_button = tk.Button(self, text="Select Root Directory", command=self.On_Select_Root_Dir)
+        self.close_button = tk.Button(self, text="Close", width=10, command=self.Close_Window, default="normal")
+        self.create_directory_button = tk.Button(self, text="Create Directory", width=15, command=self.Create_Directory, default="normal")
+        self.select_root_dir_button = tk.Button(self, text="Select Root Directory", width=15, command=self.On_Select_Root_Dir, default="active")
 
         ## define labels
-        self.root_dir_label = tk.Label(self, text="Root Directory", font='none 12 bold')
-        self.root_dir_txt = tk.Label(self, textvariable=self.root_dir_stringVar, font='none 12')
-        self.Select_Folders = tk.Label(self, text="Select Folders to Generate", font='none 12 bold')
-        self.Select_Date = tk.Label(self, text="Select Project Date", font='none 12 bold')
-        self.Year_label = tk.Label(self, text="Year", font='none 12')
-        self.Month_label = tk.Label(self, text="Month", font='none 12')
-        self.Day_label = tk.Label(self, text="Day", font='none 12')
-        self.success_label = tk.Label(self, textvariable=self.project_dir_success_stringVar, font='none 12 bold')
+        self.root_dir_label = tk.Label(self, text="Root Directory", font='none 14 bold', width=10, anchor='w')
+        self.root_dir_txt = tk.Label(self, textvariable=self.root_dir_stringVar, font='none 10', width=40, wraplength=160)
+        self.Select_Folders = tk.Label(self, text="Select Folders to Generate", font='none 14 bold', width=20, anchor="center")
+        self.Select_Date = tk.Label(self, text="Select Project Date", font='none 14 bold', width=20, anchor="center")
+        self.Year_label = tk.Label(self, text="Year - ", font='none 12', width=8)
+        self.Month_label = tk.Label(self, text="Month - ", font='none 12', width=8)
+        self.Day_label = tk.Label(self, text="Day - ", font='none 12', width=8)
+        self.success_label = tk.Label(self, textvariable=self.project_dir_success_stringVar, font='none 12 bold', width=20, wraplength=160, anchor="center")
 
         ## define combo box
-        self.year_combobox = ttk.Combobox(self, textvariable=self.year_strVar)
+        self.year_combobox = ttk.Combobox(self, textvariable=self.year_strVar, width=8, font='none 12')
         self.year_combobox['values'] = ('24', '25')
         self.year_combobox.state(["readonly"])
         self.year_combobox.current(1)
 
-        self.month_combobox = ttk.Combobox(self, textvariable=self.month_strVar)
+        self.month_combobox = ttk.Combobox(self, textvariable=self.month_strVar, width=8, font='none 12')
         self.month_combobox['values'] = ('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12')
         self.month_combobox.state(["readonly"])
         self.month_combobox.current(int(self.month)-1)
 
-        self.day_combobox = ttk.Combobox(self, textvariable=self.day_strVar)
+        self.day_combobox = ttk.Combobox(self, textvariable=self.day_strVar, width=8, font='none 12')
         self.day_combobox['values'] = ('01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30', '31')
         self.day_combobox.state(["readonly"])
         self.day_combobox.current(int(self.day)-1)
 
         ## define check buttons
-        self.port_main_check = tk.Checkbutton(self, text="Port Main", variable=self.port_main_check_bool, onvalue=True, offvalue=False)
+        self.port_main_check = tk.Checkbutton(self, text="Port Main", variable=self.port_main_check_bool, onvalue=True, offvalue=False, width=10)
         self.port_main_check.select()
-        self.stb_main_check = tk.Checkbutton(self, text=" STB Main", variable=self.stb_main_check_bool, onvalue=True, offvalue=False)
+        self.stb_main_check = tk.Checkbutton(self, text="STB Main", variable=self.stb_main_check_bool, onvalue=True, offvalue=False, width=10)
         self.stb_main_check.select()
-        self.port_jib_check = tk.Checkbutton(self, text="   Port Jib", variable=self.port_jib_check_bool, onvalue=True, offvalue=False)
+        self.port_jib_check = tk.Checkbutton(self, text="Port Jib", variable=self.port_jib_check_bool, onvalue=True, offvalue=False, width=10)
         self.port_jib_check.select()
-        self.stb_jib_check = tk.Checkbutton(self, text="    STB Jib", variable=self.stb_jib_check_bool, onvalue=True, offvalue=False)
+        self.stb_jib_check = tk.Checkbutton(self, text="STB Jib", variable=self.stb_jib_check_bool, onvalue=True, offvalue=False, width=10)
         self.stb_jib_check.select()
-        self.log_check = tk.Checkbutton(self, text="        Log", variable=self.log_check_bool, onvalue=True, offvalue=False)
+        self.log_check = tk.Checkbutton(self, text="Log", variable=self.log_check_bool, onvalue=True, offvalue=False, width=10)
         self.log_check.select()
-        self.event_check = tk.Checkbutton(self, text="      Event", variable=self.event_check_bool, onvalue=True, offvalue=False)
+        self.event_check = tk.Checkbutton(self, text="Event", variable=self.event_check_bool, onvalue=True, offvalue=False, width=10)
         self.event_check.select()
 
+        ## define seporators
+        self.horz_sep_1 = ttk.Separator(self, orient=tk.HORIZONTAL)
+        self.horz_sep_2 = ttk.Separator(self, orient=tk.HORIZONTAL)
+        self.vert_sep_1 = ttk.Separator(self, orient=tk.VERTICAL)
+
+        ## define bindings
+        self.select_root_dir_button.bind("<Button-1>", self.Check_Button_Default)
+        self.create_directory_button.bind("<Button-1>", self.Check_Button_Default)
+        self.close_button.bind("<Button-1>", self.Check_Button_Default)
+
         ## grid all
-        self.root_dir_label.grid(row=0, column=0, padx=10, pady=10)
-        self.Select_Folders.grid(row=1, column=0, padx=10, pady=10)
-        self.port_main_check.grid(row=2, column=0, padx=10, pady=5)
-        self.stb_main_check.grid(row=3, column=0, padx=10, pady=5)
-        self.port_jib_check.grid(row=4, column=0, padx=10, pady=5)
-        self.stb_jib_check.grid(row=5, column=0, padx=10, pady=5)
-        self.log_check.grid(row=6, column=0, padx=10, pady=5)
-        self.event_check.grid(row=7, column=0, padx=10, pady=5)
-        self.close_button.grid(row=8, column=0)
-
-        self.root_dir_txt.grid(row=0, column=1, padx=10, pady=10)
-        self.Select_Date.grid(row=1, column=1, padx=10, pady=10)
-
-        self.Year_label.grid(row=3, column=1, padx=10, pady=5)
-        self.Month_label.grid(row=4, column=1, padx=10, pady=5)
-        self.Day_label.grid(row=5, column=1, padx=10, pady=5)
-
-        self.create_directory_button.grid(row=8, column=1)
-
-        self.select_root_dir_button.grid(row=0, column=2)
-        self.year_combobox.grid(row=3, column=2, padx=10, pady=5)
-        self.month_combobox.grid(row=4, column=2, padx=10, pady=5)
-        self.day_combobox.grid(row=5, column=2, padx=10, pady=5)
-
-        self.success_label.grid(row=8, column=2, padx=10, pady=5)
+        self.root_dir_label.grid(row=0, column=0, padx=2, pady=5, sticky=tk.W)
+        self.root_dir_txt.grid(row=0, column=1, columnspan=3, pady=5, sticky=tk.W)
+        self.select_root_dir_button.grid(row=0, column=4, pady=5, sticky=tk.E)
+        self.horz_sep_1.grid(row=1, column=0, columnspan=5, pady=10, sticky=tk.EW)
+        self.Select_Folders.grid(row=2, column=0, columnspan=2, pady=5, sticky=tk.NSEW)
+        self.vert_sep_1.grid(row=2, column=2, rowspan=6, sticky=tk.NS)
+        self.Select_Date.grid(row=2, column=3, columnspan=2, pady=10, sticky=tk.EW)
+        self.port_main_check.grid(row=3, column=0, pady=5)
+        self.log_check.grid(row=3, column=1, pady=5)
+        self.Year_label.grid(row=3, column=3, pady=5, sticky=tk.E)
+        self.year_combobox.grid(row=3, column=4, pady=5, sticky=tk.W)
+        self.stb_main_check.grid(row=4, column=0, pady=5)
+        self.event_check.grid(row=4, column=1, pady=5)
+        self.Month_label.grid(row=4, column=3, pady=5, sticky=tk.E)
+        self.month_combobox.grid(row=4, column=4, pady=5, sticky=tk.W)
+        self.port_jib_check.grid(row=5, column=0, pady=5)
+        self.Day_label.grid(row=5, column=3, pady=5, sticky=tk.E)
+        self.day_combobox.grid(row=5, column=4, pady=5, sticky=tk.W)
+        self.stb_jib_check.grid(row=6, column=0, pady=5)
+        self.success_label.grid(row=6, column=3, rowspan=2, columnspan=2, pady=5)
+        self.horz_sep_2.grid(row=8, column=0, columnspan=5, pady=5, sticky=tk.EW)
+        self.close_button.grid(row=9, column=3, pady=5, sticky=tk.NE)
+        self.create_directory_button.grid(row=9, column=4, pady=5, sticky=tk.NE)
 
     ## define functions
+    def Close_Window(self):
+        if self.close_button['default'] != "active":
+            response = messagebox.askyesno(title="Are you sure?", message="No Project Directory has been created yet.")
+            if response:
+                self.destroy()
+        else:
+            app.mainframe.import_frame.header_frame.directory_selected_bool.set(True)
+            self.destroy()
+
     def Create_Directory(self):
         ## if no root directory selected promt to choose one
         while self.root_dir_selected == False:
@@ -156,6 +178,8 @@ class   Make_Project_Directory_Window(tk.Toplevel):
             logging.error(e)
             logging.error('Failed to create directory')
 
+        self.Check_Button_Default()
+
     def On_Select_Root_Dir(self):
         try:
             self.root_dir = filedialog.askdirectory(initialdir='/Users/sean/mbp_storage')
@@ -166,15 +190,40 @@ class   Make_Project_Directory_Window(tk.Toplevel):
             logging.error(e)
             logging.error('Failed to set project root directory in make project directory')
 
+        self.Check_Button_Default()
+
+    def Check_Button_Default(self,*args):
+        if self.root_dir_selected == False:
+            self.close_button.config(default="normal")
+            self.create_directory_button.config(default="normal")
+            self.select_root_dir_button.config(default="active")
+
+        elif self.project_dir_success_stringVar.get() == "":
+            self.close_button.config(default="normal")
+            self.create_directory_button.config(default="active")
+            self.select_root_dir_button.config(default="normal")
+
+        else:
+            self.close_button.config(default="active")
+            self.create_directory_button.config(default="normal")
+            self.select_root_dir_button.config(default="normal")
+
 class   Import_Frame_Header(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
         self.column_min_width = 160
-        ## define buttons
-        self.select_project_button = tk.Button(self, width=20, text="Select Project Directory", font='none 12 bold', command=self.On_Select_Project_Dir)
-        self.make_project_dir_button = tk.Button(self, width=20, text="Make Project Directory", font='none 12 bold', command=self.Open_Make_Project_Dir)
 
-        ## defne stringVars
+        ## define buttons
+        self.select_project_button = tk.Button(self, width=15, text="Select Project Directory", font='none 12 bold', command=self.On_Select_Project_Dir)
+        self.select_project_button['default'] = "active"
+        self.make_project_dir_button = tk.Button(self, width=15, text="Make Project Directory", font='none 12 bold', command=self.Open_Make_Project_Dir)
+        self.make_project_dir_button['default'] = "active"
+
+        ## define seperators
+        self.horiz_1 = ttk.Separator(self, orient=tk.HORIZONTAL)
+        self.horiz_2 = ttk.Separator(self, orient=tk.HORIZONTAL)
+
+        ## define stringVars
         self.project_dir_stringVar = tk.StringVar()
         self.project_dir_stringVar.set("No Directory Selected")
 
@@ -191,22 +240,34 @@ class   Import_Frame_Header(tk.Frame):
         self.log_check_bool.set(True)
         self.event_check_bool = tk.BooleanVar()
         self.event_check_bool.set(True)
+        self.directory_selected_bool = tk.BooleanVar()
+        self.directory_selected_bool.set(False)
 
         ## define Labels
-        self.import_header_label = tk.Label(self, text="Define Project Directory", font='none 14 bold')
-        self.project_dir_label = tk.Label(self, text="Project Directory", font='none 12 bold')
-        self.project_dir_txt = tk.Label(self, textvariable=self.project_dir_stringVar, font='none 12')
+        self.import_header_label = tk.Label(self, text="Define Project Directory", font='none 16 bold', width=60)
+        self.project_dir_label = tk.Label(self, text="Project Directory", font='none 14 bold', width=20)
+        self.project_dir_txt = tk.Label(self, textvariable=self.project_dir_stringVar, font='none 12', width=40)
 
         ## grid elements
-        self.import_header_label.grid(row=0, column=0, columnspan=4)
-        self.project_dir_label.grid(row=1, column=0)
-        self.project_dir_txt.grid(row=1, column=1)
-        self.select_project_button.grid(row=1, column=2)
-        self.make_project_dir_button.grid(row=1, column=3)
+        self.horiz_1.grid(row=0, column=0, columnspan=4, pady=5, sticky=tk.EW)
+        self.import_header_label.grid(row=1, column=0, pady=5, columnspan=4)
+        self.project_dir_label.grid(row=2, column=0)
+        self.project_dir_txt.grid(row=2, column=1)
+        self.select_project_button.grid(row=2, column=2)
+        self.make_project_dir_button.grid(row=2, column=3)
+        self.horiz_2.grid(row=3, column=0, columnspan=4, pady=5, sticky=tk.EW)
+
         for i in range(4):
             self.grid_columnconfigure(i, weight=1, minsize=self.column_min_width)
 
         ## bind events
+        self.button_trace = self.directory_selected_bool.trace_add('write', self.Update_Button_Default)
+
+    def Update_Button_Default(self, *args):
+        if self.directory_selected_bool.get():
+            self.select_project_button['default'] = "normal"
+            self.make_project_dir_button['default'] = "normal"
+            app.mainframe.import_frame.directory_defined_bool.set(True)
 
     def On_Select_Project_Dir(self):
         try:
@@ -214,10 +275,12 @@ class   Import_Frame_Header(tk.Frame):
                 self.project_dir = filedialog.askdirectory(initialdir='/Users/sean/mbp_storage')
                 if self.project_dir:
                     self.project_dir_stringVar.set(self.project_dir)
+                    self.directory_selected_bool.set(True)
             else:
                 self.project_dir = filedialog.askdirectory(initialdir='/Users/sean/mbp_storage')
                 if self.project_dir:
                     self.project_dir_stringVar.set(self.project_dir)
+                    self.directory_selected_bool.set(True)
         except Exception as e:
             logging.error(e)
             logging.error('Failed to set project directory')
@@ -231,6 +294,7 @@ class   Import_Frame_Header(tk.Frame):
         self.Proj_Window.stb_jib_check_bool.trace('w', self.Update_From_Proj_window)
         self.Proj_Window.log_check_bool.trace('w', self.Update_From_Proj_window)
         self.Proj_Window.event_check_bool.trace('w', self.Update_From_Proj_window)
+        self.Proj_Window
 
     def Update_From_Proj_window(self,*args):
         self.project_dir_stringVar.set(self.Proj_Window.project_dir_stringVar.get())
@@ -268,18 +332,23 @@ class   Import_Frame_Source(tk.Frame):
         tz_combo_list = ['-11', '-10', '-09', '-08', '-07', '-06', '-05', '-04', '-03', '-02', '-01', '+00', '+01',
                          '+02', '+03', '+04', '+05', '+06', '+07', '+08', '+09', '+10', '+11']
         self.timezone_combobox = self.Create_Combo(text_variable=self.timezone, combo_list=tz_combo_list, state_pre=["readonly"], current_value=11)
+        self.timezone_combobox.state(["readonly"])
 
         ts_combo_list = ['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '15', '20', '30']
         self.timestep_combobox = self.Create_Combo(text_variable=self.timestep, combo_list=ts_combo_list, state_pre=["readonly"], current_value=5)
+        self.timestep_combobox.state(["readonly"])
 
         origin_combo_list = ['EXIF', 'File Name']
         self.origin_combobox = self.Create_Combo(text_variable=self.origin, combo_list=origin_combo_list, state_pre=["readonly"], current_value=0)
+        self.origin_combobox.state(["readonly"])
 
         log_type_combo_list = ['Expedition', 'CSV', 'XML']
         if source_name == 'Event':
             self.log_type_combo = self.Create_Combo(text_variable=self.log_type, combo_list=log_type_combo_list, state_pre=["readonly"], current_value=2)
+            self.log_type_combo.state(["readonly"])
         else:
             self.log_type_combo = self.Create_Combo(text_variable=self.log_type, combo_list=log_type_combo_list, state_pre=["readonly"], current_value=0)
+            self.log_type_combo.state(["readonly"])
 
         ## define labels
         self.import_label = tk.Label(self, textvariable=self.import_path, font='none 12', width=20)
@@ -357,19 +426,19 @@ class   Import_Frame_Source(tk.Frame):
         return combo
 
     def Grid_Elements(self, source_type):
-        self.check.grid(row=0, column=0)
-        self.import_label.grid(row=0, column=1)
-        self.import_button.grid(row=0, column=2)
-        self.timezone_combobox.grid(row=0, column=3)
+        self.check.grid(row=0, column=0, pady=1)
+        self.import_label.grid(row=0, column=1, pady=1)
+        self.import_button.grid(row=0, column=2, pady=1)
+        self.timezone_combobox.grid(row=0, column=3, pady=1)
         if source_type == "sail":
-            self.timestep_combobox.grid(row=0, column=4)
-            self.origin_combobox.grid(row=0, column=5)
-            self.file_name_entry_box.grid(row=0, column=6)
-            self.file_name_check_label.grid(row=0, column=7)
+            self.timestep_combobox.grid(row=0, column=4, pady=1)
+            self.origin_combobox.grid(row=0, column=5, pady=1)
+            self.file_name_entry_box.grid(row=0, column=6, pady=1)
+            self.file_name_check_label.grid(row=0, column=7, pady=1)
             for i in range(8):
                 self.grid_columnconfigure(i, weight=1, minsize=self.column_min_width)
         elif source_type == "file":
-            self.log_type_combo.grid(row=0, column=4)
+            self.log_type_combo.grid(row=0, column=4, pady=1)
             for i in range(5):
                 self.grid_columnconfigure(i, weight=1, minsize=self.column_min_width)
 
@@ -403,6 +472,9 @@ class   Import_Frame_Files(tk.Frame):
 class   ImportFrame(tk.Frame):
     def __init__(self,master):
         super().__init__(master)
+        ## define multithreading
+        self.output_q = queue.Queue()
+        self.after(100, self.Process_Queue)
 
         ## define default list
         self.defaults = [0,0,1,1,0,2]
@@ -423,6 +495,8 @@ class   ImportFrame(tk.Frame):
         ## define bools
         self.use_port_as_stb = tk.BooleanVar()
         self.use_port_as_stb.set(True)
+        self.directory_defined_bool = tk.BooleanVar()
+        self.directory_defined_bool.set(False)
 
         ## define stringVars
         self.port_main_path_final_stringVar = tk.StringVar()
@@ -450,6 +524,13 @@ class   ImportFrame(tk.Frame):
         self.sail_header_frame = self.Create_Labels(self.sails,["sail", "Import Path", "Select Directory", "Time Zone", "Time Step", "Time Origin", "Enter Manual File Name", "File Name Check"])
         self.data_header_frame = self.Create_Labels(self.files,["Data Source", "Import Path", "Select Directory", "Time Zone", "File Type"])
 
+        ## define seporators
+        self.horz_sep_1 = ttk.Separator(self.sails, orient=tk.HORIZONTAL)
+        self.horz_sep_2 = ttk.Separator(self.sails, orient=tk.HORIZONTAL)
+        self.horz_sep_3 = ttk.Separator(self.files, orient=tk.HORIZONTAL)
+        self.horz_sep_4 = ttk.Separator(self.files, orient=tk.HORIZONTAL)
+        self.horz_sep_5 = ttk.Separator(self.buttons, orient=tk.HORIZONTAL)
+
         ## grid elements
         self.Grid_Elements()
 
@@ -457,12 +538,128 @@ class   ImportFrame(tk.Frame):
         self.import_sail_mp4_button.bind("<Button-1>", self.Update_File_Paths)
         self.logs_process_button.bind("<Button-1>", self.Update_File_Paths)
         self.find_files_button.bind("<Button-1>", self.Update_File_Paths)
+        self.directory_defined_bool.trace_add('write', self.Update_Defaults)
+        traces = []
+        for source in [self.port_main, self.stb_main, self.port_jib, self.stb_jib, self.log,self.event]:
+            trace_1 = source.import_path.trace_add('write', self.Update_Defaults)
+            trace_2 = source.check_bool.trace_add('write', self.Update_Defaults)
+            traces.append(trace_1)
+            traces.append(trace_2)
+
+        for sources in [self.port_main_path_final_stringVar, self.stb_main_path_final_stringVar, self.port_jib_path_final_stringVar, self.stb_jib_path_final_stringVar, self.log_path_final_stringVar, self.event_path_final_stringVar]:
+            trace_1 = sources.trace_add('write', self.Update_Defaults)
+            traces.append(trace_1)
+
+        for var in [self.port_jib.import_path, self.port_jib.timezone, self.port_jib.timestep, self.port_jib.origin, self.port_jib.file_name_entry]:
+            traces.append(var.trace_add('write', self.On_Use_Port_for_Stb))
+
         ## define functions
+
+    def Update_Defaults(self, *args):
+
+        need_to_check_all = False
+        sources = [self.port_main, self.stb_main, self.port_jib, self.stb_jib, self.log, self.event]
+        final_paths = [self.port_main_path_final_stringVar, self.stb_jib_path_final_stringVar, self.port_jib_path_final_stringVar, self.stb_jib_path_final_stringVar, self.log_path_final_stringVar, self.event_path_final_stringVar]
+        for i in range(len(sources)):
+            check = sources[i].check_bool.get()
+            button = sources[i].import_button
+            path = sources[i].import_path.get()
+            pathFinal = final_paths[i].get()
+
+            if self.directory_defined_bool.get():
+                if check:
+                    if path == "No File Selected" and pathFinal == "":
+                        button['default'] = "active"
+                        need_to_check_all = True
+                    else:
+                        button['default'] = "normal"
+                        need_to_check_all = True
+
+                else:
+                    button['default'] = "normal"
+                    need_to_check_all = True
+
+            elif not self.directory_defined_bool.get():
+                button['default'] = "normal"
+                need_to_check_all = False
+
+        if need_to_check_all:
+            test = []
+            for i in range(4):
+                if sources[i].check_bool.get():
+                    if sources[i].import_path.get() != "No File Selected" or final_paths[i].get() != "":
+                        test.append(True)
+                    else:
+                        test.append(False)
+                else:
+                    test.append(True)
+            if all(test):
+                bool_check = []
+                for i in range(4):
+                    sources[i].import_button['default'] = "normal"
+                    if not sources[i].check_bool.get():
+                        bool_check.append(1)
+                if len(bool_check) < 4:
+                    self.import_sail_mp4_button['default'] = "active"
+
+                else:
+                    self.import_sail_mp4_button['default'] = "normal"
+
+            else:
+                self.import_sail_mp4_button['default'] = "normal"
+
+
+            test = []
+            for i in range(4,6):
+                if sources[i].check_bool.get():
+                    if sources[i].import_path.get() != "No File Selected" or final_paths[i].get() != "":
+                        test.append(True)
+
+                    else:
+                        test.append(False)
+
+                else:
+                    test.append(True)
+                if all(test):
+                    bool_check = []
+                    for i in range(4,6):
+                        sources[i].import_button['default'] = "normal"
+                        if not sources[i].check_bool.get():
+                            bool_check.append(1)
+                    if len(bool_check) < 2:
+                        self.logs_process_button['default'] = "active"
+
+                    else:
+                        self.logs_process_button['default'] = "normal"
+
+                else:
+                    self.logs_process_button['default'] = "normal"
+
+        else:
+            self.import_sail_mp4_button['default'] = "normal"
+            self.logs_process_button['default'] = "normal"
+
+        if self.import_sail_mp4_button['default'] == "active" and self.logs_process_button['default'] == "active":
+            self.find_files_button['default'] = "normal"
+        elif not self.directory_defined_bool.get():
+            self.find_files_button['default'] = "normal"
+        elif self.import_sail_mp4_button['default'] == "normal" and self.logs_process_button['default'] == "normal" and not self.directory_defined_bool.get():
+            self.find_files_button['default'] = "normal"
+
+        else:
+            check = []
+            for source in sources:
+                if source.check_bool.get():
+                    check.append(1)
+            if len(check) == 0:
+                self.find_files_button['default'] = "normal"
+            else:
+                self.find_files_button['default'] = "active"
 
     def Update_File_Paths(self,*args):
         self.final_file_paths.Print_File_Paths()
 
-    def On_Use_Port_for_Stb(self):
+    def On_Use_Port_for_Stb(self,*args):
         if self.use_port_as_stb.get():
             self.stb_jib.import_path.set(self.port_jib.import_path.get())
             self.stb_jib.timezone.set(self.port_jib.timezone.get())
@@ -477,7 +674,7 @@ class   ImportFrame(tk.Frame):
         frame = tk.Frame(parent)
         labels = []
         for i in range(len(text)):
-            labels.append(tk.Label(frame, text=text[i], font='none 12 bold', width=15))
+            labels.append(tk.Label(frame, text=text[i], font='none 12 bold', width=15, anchor="center"))
 
         for i in range(len(text)):
             labels[i].grid(row = 0, column=i)
@@ -486,32 +683,37 @@ class   ImportFrame(tk.Frame):
         return frame
 
     def Grid_Elements(self):
-        self.sail_header_frame.grid(column=0, row=0, columnspan=8)
-        self.port_main.grid(column=0, row=1, columnspan=8)
-        self.stb_main.grid(column=0, row=2, columnspan=8)
-        self.port_jib.grid(column=0, row=3, columnspan=8)
-        self.stb_jib.grid(column=0, row=4, columnspan=8)
+        self.sail_header_frame.grid(column=0, row=0, columnspan=8, pady=5)
+        self.horz_sep_1.grid(column=0, row=1, columnspan=8, pady=5, sticky=tk.EW)
+        self.port_main.grid(column=0, row=2, columnspan=8, pady=2)
+        self.stb_main.grid(column=0, row=3, columnspan=8, pady=2)
+        self.port_jib.grid(column=0, row=4, columnspan=8, pady=2)
+        self.stb_jib.grid(column=0, row=5, columnspan=8, pady=2)
+        self.horz_sep_2.grid(column=0, row=6, columnspan=8, pady=2, sticky=tk.EW)
         for i in range(8):
             self.sails.grid_columnconfigure(i, weight=1, minsize=self.port_main.column_min_width)
 
-        self.data_header_frame.grid(column=0, row=0, columnspan=5)
-        self.log.grid(column=0, row=1, columnspan=5)
-        self.event.grid(column=0, row=2, columnspan=5)
+        self.data_header_frame.grid(column=0, row=0, columnspan=5, pady=5)
+        self.horz_sep_3.grid(column=0, row=1, columnspan=5, pady=2, sticky=tk.EW)
+        self.log.grid(column=0, row=2, columnspan=5, pady=2)
+        self.event.grid(column=0, row=3, columnspan=5, pady=2)
+        self.horz_sep_4.grid(column=0, row=4, columnspan=5, pady=2, sticky=tk.EW)
         for i in range(5):
             self.files.grid_columnconfigure(i, weight=1, minsize=self.port_main.column_min_width)
 
-        self.use_port_as_stb_check.grid(column=0, row=0, columnspan=2)
-        self.import_sail_mp4_button.grid(column=0, row=1, columnspan=2)
-        self.logs_process_button.grid(column=0, row=2, columnspan=2)
-        self.find_files_button.grid(column=0, row=3, columnspan=2)
+        self.use_port_as_stb_check.grid(column=0, row=0, columnspan=2, pady=2)
+        self.import_sail_mp4_button.grid(column=0, row=1, columnspan=2, pady=2)
+        self.logs_process_button.grid(column=0, row=2, columnspan=2, pady=2)
+        self.find_files_button.grid(column=0, row=3, columnspan=2, pady=2)
+        self.horz_sep_5.grid(column=0, row=4, columnspan=2, pady=2, sticky=tk.EW)
         for i in range(2):
             self.buttons.grid_columnconfigure(i, weight=1, minsize=self.port_main.column_min_width)
 
         self.header_frame.grid(column=0, row=0, columnspan=4, rowspan=2, padx=10, pady=10)
-        self.sails.grid(column=0, row=2, columnspan=8, rowspan=5, padx=10, pady=10)
-        self.files.grid(column=0, row=7, columnspan=5, rowspan=3, padx=10, pady=10)
-        self.buttons.grid(column=0, row=10, columnspan=2, rowspan=3, padx=10, pady=10)
-        self.final_file_paths.grid(column=0, row=13, columnspan=3)
+        self.sails.grid(column=0, row=2, columnspan=8, rowspan=7, padx=10, pady=10)
+        self.files.grid(column=0, row=9, columnspan=5, rowspan=5, padx=10, pady=10)
+        self.buttons.grid(column=0, row=14, columnspan=2, rowspan=5, padx=10, pady=10)
+        self.final_file_paths.grid(column=0, row=19, columnspan=3)
         for i in range(8):
             self.grid_columnconfigure(i, weight=1, minsize=self.port_main.column_min_width)
 
@@ -536,17 +738,33 @@ class   ImportFrame(tk.Frame):
                 logging.error(e)
                 logging.error("Failed to import Event File")
 
+    def Update_Path_Final(self, output):
+        path_stringVars = [self.port_main_path_final_stringVar, self.stb_main_path_final_stringVar,
+                           self.port_jib_path_final_stringVar, self.stb_jib_path_final_stringVar]
+        path_stringVars[output[0]].set(output[1])
+
+    def Process_Queue(self):
+        try:
+            while True:
+                output = self.output_q.get_nowait()
+                self.Update_Path_Final(output)
+        except queue.Empty:
+            pass
+        finally:
+            self.after(100, self.Process_Queue)
+
     def On_Import_Sail(self):
         selectedSails = [self.header_frame.port_main_check_bool, self.header_frame.stb_main_check_bool, self.header_frame.port_jib_check_bool,self.header_frame.stb_jib_check_bool]
-        folderNames = ['portMain', 'stbMain', 'portJib', 'stbJib']
-        path_stringVars = [self.port_main_path_final_stringVar, self.stb_main_path_final_stringVar, self.port_jib_path_final_stringVar, self.stb_jib_path_final_stringVar]
+        threads = []
         for i in range(len(selectedSails)):
             if selectedSails[i].get() == True:
-                newPath = self.Import_Sail(i)
-                path_stringVars[i].set(newPath)
+                t = threading.Thread(target=self.Import_Sail, args=(i,), daemon=True)
+                threads.append(t)
+
+        for t in threads:
+            t.start()
 
     def Import_Sail(self,source):
-
         folderNames = ['portMain', 'stbMain', 'portJib', 'stbJib']
         sources = [[self.port_main.import_path.get(),self.port_main.timezone.get(), self.port_main.timestep.get(), self.port_main.origin.get(), self.port_main.file_name_entry.get()],
                    [self.stb_main.import_path.get(),self.stb_main.timezone.get(), self.stb_main.timestep.get(), self.stb_main.origin.get(), self.stb_main.file_name_entry.get()],
@@ -561,19 +779,22 @@ class   ImportFrame(tk.Frame):
                     shutil.copy(sources[source][0], newPath)
                     try:
                         veeringVideo.Rename_GP_TimeLapse(newPath,sources[source][1],sources[source][2]).Rename()
-                        return newPath
+
                     except Exception as e:
                         logging.error(e)
                         logging.error("Veering Rename Go Pro failed on"+str(sources[source][0]))
+                        newPath = "Failed"
             else:
                 try:
                     newPath = os.path.join(self.header_frame.project_dir_stringVar.get(), folderNames[source], sources[source][4]+"_"+str(sources[source][2])+".mp4")
                     shutil.copy(sources[source][0], newPath)
-                    return newPath
+
                 except Exception as e:
                     logging.error(e)
                     logging.error("Copying File Failed "+str(sources[source][0]))
+                    newPath = "Failed"
 
+            self.output_q.put([source,newPath])
 
         except Exception as e:
             logging.error(e)
@@ -1151,6 +1372,7 @@ class   Filter_Range_Selector(tk.Frame):
                 for i in range(len(app.mainframe.data_cleaning.topFrame.logVars_listbox.curselection())):
                     values.append(app.mainframe.data_cleaning.topFrame.logVars_listbox.get(i))
                 self.df_var_combo['values'] = values
+                self.df_var_combo.state(["readonly"])
                 self.df_var_combo.grid(row=0, column=4, padx=5, pady=5, columnspan=3)
 
             else:
@@ -1529,6 +1751,8 @@ class   Filter_Frame(tk.Frame):
 class   Visual_Picker(tk.Toplevel):
     def __init__(self, master, file_path,orig_height,orig_width, flip_vertical, flip_horizontal, rotate_90, rotate_270, start_values):
         super().__init__(master)
+        self.title("Visual Picker")
+
         self.crop_top_stringVar = tk.StringVar()
         self.crop_bottom_stringVar = tk.StringVar()
         self.crop_lhs_stringVar = tk.StringVar()
@@ -1624,6 +1848,8 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.flip_vertical_bool  = tk.BooleanVar()
         self.rotate_90_bool  = tk.BooleanVar()
         self.rotate_270_bool  = tk.BooleanVar()
+        self.load_bool = tk.BooleanVar()
+        self.load_bool.set(True)
 
         ## define stringvars
         self.crop_lhs_stringVar = tk.StringVar()
@@ -1636,14 +1862,18 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.mask_bottom_stringVar = tk.StringVar()
         self.sail_header_stringVar = tk.StringVar()
         self.sail_header_stringVar.set(sail)
-        self.change_preview_ind_stringVar = tk.StringVar()
-        self.change_preview_ind_stringVar.set("0")
+        self.change_preview_ind_intVar = tk.IntVar()
+        self.image_count_stringVar = tk.StringVar()
+        self.image_width_stringVar = tk.StringVar()
+        self.image_height_stringVar = tk.StringVar()
+
 
         ## create checkboxes
         self.flip_horizontal_check = tk.Checkbutton(self, text="Flip Horizontal", variable=self.flip_horizontal_bool, onvalue=True, offvalue=False)
         self.flip_vertical_check = tk.Checkbutton(self, text="Flip Vertical", variable=self.flip_vertical_bool, onvalue=True, offvalue=False)
         self.rotate_90_check = tk.Checkbutton(self, text="Rotate 90", variable=self.rotate_90_bool, onvalue=True, offvalue=False)
         self.rotate_270_check = tk.Checkbutton(self, text="Rotate 270", variable=self.rotate_270_bool, onvalue=True, offvalue=False)
+        self.load_check = tk.Checkbutton(self, text="Load into .H5 format", variable=self.load_bool, onvalue=True, offvalue=False)
 
         ## create entryboxes
         self.crop_lhs_entry = tk.Entry(self, textvariable=self.crop_lhs_stringVar, width=5)
@@ -1668,10 +1898,14 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.small_labels = []
         for text in ['Crop LHS','Crop Top', 'Crop Bottom', 'Crop RHS', 'Mask Top','Mask  Bottom', 'Mask  LHS', 'Mask  RHS']:
             self.small_labels.append(tk.Label(self, text=text, font='none 10'))
+        self.image_count_label = tk.Label(self, textvariable=self.image_count_stringVar, font='none 12')
+        self.image_width_label = tk.Label(self, textvariable=self.image_width_stringVar, font='none 12')
+        self.image_height_label = tk.Label(self, textvariable=self.image_height_stringVar, font='none 12')
 
         ## create combobox
-        self.change_preview_ind_combo = ttk.Combobox(self, textvariable=self.change_preview_ind_stringVar, width=5)
+        self.change_preview_ind_combo = ttk.Combobox(self, textvariable=self.change_preview_ind_intVar, width=5)
         self.change_preview_ind_combo['values'] = [-100, -10, -1, 0, 1, 10, 100]
+        self.change_preview_ind_combo.state(["readonly"])
 
         ## Grid
         self.sail_header_label.grid(column=0, row=0, padx=5, pady=5)
@@ -1707,12 +1941,19 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.rotate_90_check.grid(row=3, column=6)
         self.rotate_270_check.grid(row=4, column=6)
 
+        self.load_check.grid(row=1, column=16, padx=5, pady=2)
+        self.image_count_label.grid(row=2, column=16, padx=5)
+        self.image_height_label.grid(row=3, column=16, padx=5)
+        self.image_width_label.grid(row=4, column=16, padx=5)
+
+        ## bind events
+        trace = self.change_preview_ind_intVar.trace_add('write',self.Update_From_Index)
+
     def Bind_Events(self,*args):
         self.graphical_chooser.crop_top_stringVar.trace('w',self.Update_From_Chooser)
         self.graphical_chooser.crop_lhs_stringVar.trace('w', self.Update_From_Chooser)
         self.graphical_chooser.crop_bottom_stringVar.trace('w', self.Update_From_Chooser)
         self.graphical_chooser.crop_rhs_stringVar.trace('w', self.Update_From_Chooser)
-
 
     def Launch_Graphical_Chooser(self):
         self.graphical_chooser = Visual_Picker(self,self.img_path,self.orig_height, self.orig_width,self.flip_vertical_bool.get(),self.flip_horizontal_bool.get(), self.rotate_90_bool.get(), self.rotate_270_bool.get(),
@@ -1727,9 +1968,19 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.crop_lhs_stringVar.set(str(self.graphical_chooser.crop_lhs_stringVar.get()))
         self.crop_bottom_stringVar.set(str(self.graphical_chooser.crop_bottom_stringVar.get()))
         self.crop_rhs_stringVar.set(str(self.graphical_chooser.crop_rhs_stringVar.get()))
+        self.Update_Width_Height()
+
+    def Update_From_Index(self,*args):
+        self.Load_Preview()
+        self.Update_Preview()
+
+    def Update_Width_Height(self,*args):
+        self.image_height_stringVar.set("The Image Height is - "+str(int(self.crop_bottom_stringVar.get()) - int(self.crop_top_stringVar.get())))
+        self.image_width_stringVar.set("The Image Width is - "+str(int(self.crop_rhs_stringVar.get()) - int(self.crop_lhs_stringVar.get())))
 
     def Load_Preview(self):
         thumbnail_width = 200
+        self.img_index = self.img_index+self.change_preview_ind_intVar.get()
         self.img_path = os.path.join(self.directory,os.listdir(self.directory)[self.img_index])
         image = Image.open(self.img_path)
         self.orig_width, self.orig_height = image.size
@@ -1775,12 +2026,15 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.thumbnail_canvas_final = tk.Canvas(self, width=thumbnail_width, height=thumbnail_height, bg='#C8C8C8')
         self.thumbnail_canvas_final.create_image(thumbnail_width/2, thumbnail_height/2, image=self.image_final)
         self.thumbnail_canvas_final.grid(row=1, column=7, rowspan=8)
+        self.image_count_stringVar.set("The image count is - "+str(len(os.listdir(self.directory))))
+        self.Update_Width_Height()
 
 class   Geometric_Transforms_Frame(tk.Frame):
     def __init__(self, master):
         super().__init__(master)
 
         self.load_and_process_button = tk.Button(self, text="Load to .H5", command=self.On_Load_Button)
+        self.load_and_process_button.config(default="active")
 
     def Make_Geometry_Transforms(self):
         self.bools = [app.mainframe.import_frame.port_main.check_bool.get(),
@@ -1809,7 +2063,7 @@ class   Geometric_Transforms_Frame(tk.Frame):
                     sail.Update_Preview()
                 self.geometric_properties_list.append(sail)
 
-        self.load_and_process_button.grid(row=i+1, column=0, padx=10, pady=10)
+        self.load_and_process_button.grid(row=i+1, column=5, padx=10, pady=10)
 
     def Load_to_Array(self,file_path,crops):
         time_stamps = []
@@ -1854,7 +2108,8 @@ class   Geometric_Transforms_Frame(tk.Frame):
 
     def On_Load_Button(self):
         for i in range(len(self.bools)):
-            if self.bools[i]:
+            if self.bools[i] and app.mainframe.geometric_transfor_frame.geometric_properties_list[i].load_bool.get():
+
                 head, tail = os.path.split(self.paths[i])
                 file_path = os.path.join(head,"jpg")
 
@@ -1874,25 +2129,34 @@ class   Graph_Popup(tk.Toplevel):
         self.type = type
         self.source = int(source)
         self.close_button = tk.Button(self, text="Close", command=self.destroy)
-        self.close_button.grid(row=0, column=0, padx=10, pady=10)
+        self.close_button.grid(row=0, column=2, padx=10, pady=10)
         if self.type == "search":
-            stringVars = [app.mainframe.autoscan_parent.pages[self.source].threshold_search_min_stringVar,
+            stringVars_main = [app.mainframe.autoscan_parent.pages[self.source].threshold_search_min_stringVar,
                           app.mainframe.autoscan_parent.pages[self.source].threshold_search_max_stringVar,
                           app.mainframe.autoscan_parent.pages[self.source].threshold_search_increment_stringVar]
 
+            self.stringVars = []
+            trace = []
+
+            lebel_text = ["Threshold Search min value", "Threshold Search max value", "Threshold Search increment value"]
+            label_widgets = []
             entry_widgets = []
             for i in range(3):
-                entry = tk.Entry(self, textvariable=stringVars[i], width=5)
-                entry.grid(row=1, column=i)
+                stringVar = tk.StringVar()
+                stringVar.set(stringVars_main[i].get())
+
+                trace = stringVar.trace_add("write", app.mainframe.autoscan_parent.pages[self.source].Update_From_Popup)
+                self.stringVars.append(stringVar)
+                label = tk.Label(self, text=lebel_text[i])
+                label.grid(row=1, column=i, padx=2, pady=2)
+                label_widgets.append(label)
+                entry = tk.Entry(self, textvariable=self.stringVars[i], width=5)
+                entry.grid(row=2, column=i)
                 entry_widgets.append(entry)
-
-
 
         canvas = FigureCanvasTkAgg(fig, master=self)
         self.canvas_widget = canvas.get_tk_widget()
-        self.canvas_widget.grid(row=2, column=0, sticky='nsew')
-
-
+        self.canvas_widget.grid(row=3, column=0, columnspan=5, sticky='nsew')
 
 class   Autoscan_Frame(tk.Frame):
     def __init__(self, master, path, index):
@@ -2071,6 +2335,14 @@ class   Autoscan_Frame(tk.Frame):
         self.sql_button.grid(row=21, column=3)
         self.export_button.grid(row=22, column=1, padx=15, pady=10)
 
+    def Update_From_Popup(self,*args):
+        print('Update_From_Popup')
+        self.threshold_search_min_stringVar.set(self.thresh_graph.stringVars[0].get())
+        self.threshold_search_max_stringVar.set(self.thresh_graph.stringVars[1].get())
+        self.threshold_search_increment_stringVar.set(self.thresh_graph.stringVars[2].get())
+        print(self.threshold_search_min_stringVar.get())
+        self.generate_pixcels_run_bool.set(False)
+
     def Make_Plot(self,fig,gridPos, gridSpan):
         canvas = FigureCanvasTkAgg(fig, master=self)
         self.canvas_widget = canvas.get_tk_widget()
@@ -2100,6 +2372,7 @@ class   Autoscan_Frame(tk.Frame):
         if self.generate_pixcels_run_bool.get() == False:
             self.Generate_pixcels()
         self.thresholds.Threshold_Graphs()
+        print(self.thresholds.searchRange)
         Graph_Popup(self,"Threshold Selection", self.thresholds.thesholdFigure, "search", self.index_stringVar.get())
 
     def Open_Offset_Sweep(self):
@@ -2176,6 +2449,7 @@ class   Autoscan_Parent(ttk.Notebook):
 
                 else:
                     self.pages[i].path_to_h5_stringVar.set(self.paths[i])
+
 
 
 
