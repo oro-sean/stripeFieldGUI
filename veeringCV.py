@@ -232,6 +232,7 @@ class Thresholding:
     def Calc_Distances(self):
         self.eucledianDistances = np.linalg.norm(self.targetColour - self.threshPix, axis=1)
 
+
     def Calc_Threshold(self):
         try:
             x_mean = []
@@ -241,7 +242,14 @@ class Thresholding:
                 x_mean.append(x1)
                 y_mean.append(np.mean(self.eucledianDistances[np.where(self.eucledianDistances < x1)]))
 
-            opt_mean = x_mean[find_peaks(np.gradient(y_mean)*-1)[0][0]]
+            peaks = find_peaks(np.gradient(np.gradient(y_mean))*-1)
+            if peaks[0].size == 0:
+                peaks = find_peaks(np.gradient(y_mean)*-1)
+            if peaks[0].size == 0:
+                peaks = find_peaks(y_mean)
+
+            opt_mean = x_mean[peaks[0][0]]
+
         except Exception as e:
             logging.error(e)
             logging.error('Failed to calculate opt_mean do to ')
@@ -254,7 +262,14 @@ class Thresholding:
                 x_std.append(x1)
                 y_std.append(np.std(self.eucledianDistances[np.where(self.eucledianDistances < x1)]))
 
-            opt_std = x_std[find_peaks(np.gradient(np.gradient(y_std)))[0][0]]
+            peaks = find_peaks(np.gradient(np.gradient(y_std)))
+            if peaks[0].size == 0:
+                 peaks = find_peaks(np.gradient(y_std))
+            if peaks[0].size == 0:
+                peaks = find_peaks(y_std)
+
+            opt_std = x_std[peaks[0][0]]
+
         except Exception as e:
             logging.error(e)
             logging.error('Failed to calculate opt_std do to ')
@@ -269,7 +284,12 @@ class Thresholding:
                 x_count.append(x1)
                 y_count.append((np.std(np.unique(np.where(eucledianDistances< x1)[1], return_counts=True)[1])))
 
-            opt_count = x_count[find_peaks(np.gradient(y_count)*-1)[0][0]]
+            peaks = find_peaks(np.gradient(np.gradient(y_count))*-1)
+            if peaks[0].size == 0:
+                peaks = find_peaks(np.gradient(y_count)*-1)
+            if peaks[0].size == 0:
+                peaks = find_peaks(y_count)
+            opt_count = x_count[peaks[0][0]]
         except Exception as e:
             logging.error(e)
             logging.error('Failed to calculate opt_count do to ')
@@ -408,35 +428,144 @@ class Set_DB:
         if self.setCluster_min < 2:
             self.setCluster_min = 2
 
-        stripes_rot_clus, inv = np.unique(self.stripes_rot, axis=0, return_inverse=True)
-        stripe_clusters_set = DBSCAN(eps=self.setCluster_eps, min_samples=self.setCluster_min).fit(stripes_rot_clus)
-        cluster_counts = np.unique(stripe_clusters_set.labels_[inv], return_counts=True)
-        cluster_counts = np.array([cluster_counts[1], cluster_counts[0]])
-        cluster_counts_sorted = np.sort(cluster_counts)
+        self.stripes_rot_clus, self.inv = np.unique(self.stripes_rot, axis=0, return_inverse=True)
+        self.stripe_clusters_set = DBSCAN(eps=self.setCluster_eps, min_samples=self.setCluster_min).fit(self.stripes_rot_clus)
+        self.cluster_counts = np.unique(self.stripe_clusters_set.labels_[inv], return_counts=True)
+        self.cluster_counts = np.array([self.cluster_counts[1], self.cluster_counts[0]])
+        self.cluster_counts_sorted = np.sort(self.cluster_counts)
 
-        if (cluster_counts_sorted[0].max() / cluster_counts_sorted.sum()) > 0.98:
-            cluster_count_cutoff = np.where(cluster_counts_sorted[0] == cluster_counts_sorted[0].max())[0]
-            cluster_count_cutoff = int(cluster_count_cutoff)
-            cluster_cutoff_by = 'Percentage'
+        if (self.cluster_counts_sorted[0].max() / self.cluster_counts_sorted.sum()) > 0.98:
+            self.cluster_count_cutoff = np.where(self.cluster_counts_sorted[0] == self.cluster_counts_sorted[0].max())[0]
+            self.cluster_count_cutoff = int(self.cluster_count_cutoff)
+            self.cluster_cutoff_by = 'Percentage'
 
         else:
-            cluster_count_cutoff = \
-            np.where(np.gradient(cluster_counts_sorted[0][:-1]) == np.gradient(cluster_counts_sorted[0][:-1]).max())[0][
+            self.cluster_count_cutoff = np.where(np.gradient(self.cluster_counts_sorted[0][:-1]) == np.gradient(self.cluster_counts_sorted[0][:-1]).max())[0][
                 -1]
-            cluster_count_cutoff = int(cluster_count_cutoff)
-            cluster_cutoff_by = 'Gradient'
+            self.cluster_count_cutoff = int(self.cluster_count_cutoff)
+            self.cluster_cutoff_by = 'Gradient'
 
-        if cluster_count_cutoff < 0:
-            cluster_count_cutoff = 0
+        if self.cluster_count_cutoff < 0:
+            self.cluster_count_cutoff = 0
 
-        cluster_count_cutoff = cluster_count_cutoff + cluster_count_offset
-        cluster_filter = cluster_counts[0] >= cluster_counts_sorted[0, cluster_count_cutoff]
-        cluster_filter = cluster_counts[1, cluster_filter]
+        self.cluster_count_cutoff = self.cluster_count_cutoff + int(self.clusterOffset)
+        self.cluster_filter = self.cluster_counts[0] >= self.cluster_counts_sorted[0, self.cluster_count_cutoff]
+        self.cluster_filter = self.cluster_counts[1, self.cluster_filter]
 
+    def Cluster_Filter_FIG(self):
+        self.cluster_filterFig, axes = plt.subplots(4, 1, figsize=(5, 15))
+        axes[0].plot(self.cluster_counts_sorted[1], self.cluster_counts_sorted[0])
+        axes[0].vlines(self.cluster_count_cutoff - 1, min(self.cluster_counts_sorted[0]), max(self.cluster_counts_sorted[0]),
+                       colors='red')
+        axes[0].set_title("Count of pixcels per cluster" + "\n" +
+                          "cluster offset = " + str(self.clusterOffset) + "\n" +
+                          "cluster Cutt off = " + str(self.cluster_count_cutoff - 1) + "\n" +
+                          "Cut of set by - " + self.cluster_cutoff_by)
+        axes[1].plot(self.cluster_counts_sorted[1], np.gradient(self.cluster_counts_sorted[0]), color='orange')
+        axes[1].vlines(self.cluster_count_cutoff - 1, min(np.gradient(self.cluster_counts_sorted[0])),
+                       max(np.gradient(self.cluster_counts_sorted[0])), colors='red')
+        axes[2].plot(self.cluster_counts_sorted[1], np.gradient(np.gradient(self.cluster_counts_sorted[0])))
+        axes[2].vlines(self.cluster_count_cutoff - 1, min(np.gradient(np.gradient(self.cluster_counts_sorted[0]))),
+                       max(np.gradient(np.gradient(self.cluster_counts_sorted[0]))), colors='red')
+        axes[3].plot(self.cluster_counts_sorted[1], np.gradient(np.gradient(np.gradient(self.cluster_counts_sorted[0]))))
+        axes[3].vlines(self.cluster_count_cutoff - 1, min(np.gradient(np.gradient(np.gradient(self.cluster_counts_sorted[0])))),
+                       max(np.gradient(np.gradient(np.gradient(self.cluster_counts_sorted[0])))), colors='red')
 
+    def Cluster_Plot_FIG(self):
+        self.cluster_Plot, axes = plt.subplots(1, 2, figsize=(15, 5))
+        colours = ['tab:blue', 'tab:green', 'tab:red', 'tab:orange', 'tab:pink', 'tab:purple', 'tab:yellow', 'tab:cyan',
+                   'tab:magenta', ]
+        bar_colours = []
+        n = 0
+        for i in np.unique(self.stripe_clusters_set.labels_):
+            if i in self.cluster_filter:
+                axes[0].plot(self.stripes_rot[np.where(self.stripe_clusters_set.labels_ == i)][:, 1],
+                             self.stripes_rot[np.where(self.stripe_clusters_set.labels_ == i)][:, 0], 'o', markersize=.1,
+                             color=colours[n])
+                bar_colours.append(colours[n])
+                n += 1
+            else:
+                axes[0].plot(self.stripes_rot[np.where(self.stripe_clusters_set.labels_ == i)][:, 1],
+                             self.stripes_rot[np.where(self.stripe_clusters_set.labels_ == i)][:, 0], '*', color='black')
+                bar_colours.append('black')
+        axes[0].set_title('Stripes by Cluster')
+        axes[1].bar(np.unique(self.stripe_clusters_set.labels_, return_counts=True)[0],
+                    np.unique(self.stripe_clusters_set.labels_, return_counts=True)[1], color=bar_colours)
+        axes[1].set_xticks(np.unique(self.stripe_clusters_set.labels_, return_counts=True)[0])
+        axes[1].set_yscale('log')
+        axes[1].grid(color='grey', which='major', linestyle=':', axis='y')
+        axes[1].set_title('Pixcel count by cluster')
 
+    def Make_DB_Scan_Set(self):
+        toKeep = []
+        for i in range(len(self.cluster_filter)):
+            toKeep.append(np.where(self.stripe_clusters_set.labels_[self.inv] == self.cluster_filter[i])[0])
+        filter = np.sort(filter)
 
+        return self.stripes[filter, :]
 
+class Pic_DB_Spline:
+    def __init__(self, setRotation_degrees):
+        def Pic_DB_Scan(stripes, sample, plotSamples, pic_eps_multiplier, pic_min_multiplier):
+
+            clusterPoints_dict = {}
+            if sample:
+                step = int(np.unique(stripes[:, 2]).size / plotSamples)
+                plotIndex = []
+                i = 0
+                for i in range(plotSamples):
+                    plotIndex.append(int(i * step))
+
+                sample_plot_images = np.unique(stripes[:, 2])[plotIndex]
+            else:
+                sample_plot_images = np.unique(stripes[:, 2])
+
+            if sample:
+                sample_images_cluster_fig, axes = plt.subplots(sample_plot_images.size, 1,
+                                                               figsize=(5, sample_plot_images.size * 5))
+
+            for n in range(sample_plot_images.size):
+                i = sample_plot_images[n]
+                stripes_pic = np.where(stripes[:, 2] == i)[0]
+                stripes_pic = stripes[stripes_pic, 0:2]
+                stripes_rot = pca.transform(stripes_pic)
+
+                pca_pic = PCA(n_components=2).fit(stripes_pic)
+                picRotation = np.degrees(np.arccos(pca_pic.components_[0, 0]))
+
+                pic_eps = int((stripes_pic[:, 0].max() - stripes_pic[:, 0].min()) * pic_eps_multiplier)
+                if pic_eps < 2:
+                    pic_eps = 2
+                pic_min = int(stripes_pic.size * pic_min_multiplier)
+                if pic_min < 2:
+                    pic_min = 2
+
+                stripe_clusters = DBSCAN(eps=pic_eps, min_samples=pic_min).fit(stripes_rot)
+
+                cluster_points = []
+                for cluster in np.unique(stripe_clusters.labels_):
+                    if cluster > -1:
+                        points = stripes_rot[np.where(stripe_clusters.labels_ == cluster)[0], :]
+                        cluster_points.append(points)
+                    clusterPoints_dict[i] = cluster_points
+
+                if sample:
+                    for i in np.unique(stripe_clusters.labels_):
+                        if i > -1:
+                            axes[n].scatter(stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 1],
+                                            stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 0])
+                        else:
+                            axes[n].scatter(stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 1],
+                                            stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 0], marker='*',
+                                            color='black')
+
+                    axes[n].set_title('Image No. ' + str(sample_plot_images[n]) + '\n' +
+                                      'Image Rotation = ' + str(np.abs(picRotation - setRotation_degrees)) + '\n' +
+                                      'Pic Eps = ' + str(pic_eps) + ' -- Pic Min = ' + str(pic_min))
+                    axes[n].set_xticks([])
+                    axes[n].set_yticks([])
+
+            self.clusterPoints_dict = clusterPoints_dict
 
 
 
