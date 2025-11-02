@@ -9,6 +9,7 @@ class VeeringLog:
 
     def Expedition_To_DF(self):
         with open(self.logPath, newline='') as csvfile:
+            print("Reading log file")
             reader = csv.reader(csvfile, delimiter=',')
             labels = next(reader)
             num = next(reader)
@@ -19,22 +20,32 @@ class VeeringLog:
             values = []
 
             for row in reader:
+                print("Iterate over rows")
+                print(row)
                 record ={}
                 for i in range(0,(len(row)-1),2):
+                    print(i)
                     try:
+                        print("in Try")
                         key = row[i]
                         value = float(row[i+1])
                         record[key] = value
                     except:
-                        break
+                        print("error")
+                print("exit i")
                 values.append(record)
+                print("values appended")
 
         df = pd.DataFrame.from_records(values)
+        print("Made DF")
         df = df.rename(columns=columnLabels)
         self.log_df = df
 
     def Select_Variables(self, variables):
+        print("Select variables - "+str(variables))
+        print(self.log_df.shape)
         self.log_df = self.log_df[variables].dropna()
+        print(self.log_df.shape)
 
     def Add_Time_Zone(self,timeZone):
         self.timeZone = datetime.timedelta(hours=timeZone)
