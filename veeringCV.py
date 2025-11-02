@@ -1,6 +1,7 @@
 import numpy as np
 import h5py
 import matplotlib.pyplot as plt
+from contourpy.array import split_points_at_nan
 #import faiss
 from sklearn.cluster import KMeans
 #from sklearnex import patch_sklearn
@@ -9,6 +10,7 @@ from scipy.spatial import distance
 from scipy.signal import find_peaks
 from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
+from scipy.interpolate import UnivariateSpline
 import logging
 
 class VeeringNormalisation:
@@ -264,7 +266,9 @@ class Thresholding:
 
             peaks = find_peaks(np.gradient(np.gradient(y_std)))
             if peaks[0].size == 0:
-                 peaks = find_peaks(np.gradient(y_std))
+                peaks = find_peaks(np.gradient(np.gradient(y_std))*-1)
+                if peaks[0].size == 0:
+                    peaks = find_peaks(np.gradient(y_std))
             if peaks[0].size == 0:
                 peaks = find_peaks(y_std)
 
@@ -430,7 +434,7 @@ class Set_DB:
 
         self.stripes_rot_clus, self.inv = np.unique(self.stripes_rot, axis=0, return_inverse=True)
         self.stripe_clusters_set = DBSCAN(eps=self.setCluster_eps, min_samples=self.setCluster_min).fit(self.stripes_rot_clus)
-        self.cluster_counts = np.unique(self.stripe_clusters_set.labels_[inv], return_counts=True)
+        self.cluster_counts = np.unique(self.stripe_clusters_set.labels_[self.inv], return_counts=True)
         self.cluster_counts = np.array([self.cluster_counts[1], self.cluster_counts[0]])
         self.cluster_counts_sorted = np.sort(self.cluster_counts)
 
@@ -440,8 +444,7 @@ class Set_DB:
             self.cluster_cutoff_by = 'Percentage'
 
         else:
-            self.cluster_count_cutoff = np.where(np.gradient(self.cluster_counts_sorted[0][:-1]) == np.gradient(self.cluster_counts_sorted[0][:-1]).max())[0][
-                -1]
+            self.cluster_count_cutoff = np.where(np.gradient(self.cluster_counts_sorted[0][:-1]) == np.gradient(self.cluster_counts_sorted[0][:-1]).max())[0][-1]
             self.cluster_count_cutoff = int(self.cluster_count_cutoff)
             self.cluster_cutoff_by = 'Gradient'
 
@@ -451,6 +454,8 @@ class Set_DB:
         self.cluster_count_cutoff = self.cluster_count_cutoff + int(self.clusterOffset)
         self.cluster_filter = self.cluster_counts[0] >= self.cluster_counts_sorted[0, self.cluster_count_cutoff]
         self.cluster_filter = self.cluster_counts[1, self.cluster_filter]
+
+        self.pca = pca
 
     def Cluster_Filter_FIG(self):
         self.cluster_filterFig, axes = plt.subplots(4, 1, figsize=(5, 15))
@@ -498,77 +503,440 @@ class Set_DB:
 
     def Make_DB_Scan_Set(self):
         toKeep = []
+        print(len(self.cluster_filter))
         for i in range(len(self.cluster_filter)):
-            toKeep.append(np.where(self.stripe_clusters_set.labels_[self.inv] == self.cluster_filter[i])[0])
-        filter = np.sort(filter)
+            print(i)
+            toKeep.append(list(np.where(self.stripe_clusters_set.labels_[self.inv] == self.cluster_filter[i])[0]))
 
-        return self.stripes[filter, :]
+        toKeep = [item for sublist in toKeep for item in sublist]
+        self.toKeep = toKeep
+        filter = np.sort(toKeep)
 
-class Pic_DB_Spline:
-    def __init__(self, setRotation_degrees):
-        def Pic_DB_Scan(stripes, sample, plotSamples, pic_eps_multiplier, pic_min_multiplier):
+        self.filter = filter
 
-            clusterPoints_dict = {}
+        return self.stripes[filter, :], self.pca
+
+class Pic_DB:
+    def __init__(self, stripes, setRotation_degrees, set_pca):
+        self.stripes = stripes
+        self.setRotation_degrees = setRotation_degrees
+        self.set_pca = set_pca
+
+    def Pic_DB_Scan(self, sample, plotSamples, pic_eps_multiplier, pic_min_multiplier):
+
+        clusterPoints_dict = {}
+        if sample:
+            step = int(np.unique(self.stripes[:, 2]).size / plotSamples)
+            plotIndex = []
+            i = 0
+            for i in range(plotSamples):
+                plotIndex.append(int(i * step))
+
+            sample_plot_images = np.unique(self.stripes[:, 2])[plotIndex]
+        else:
+            sample_plot_images = np.unique(self.stripes[:, 2])
+
+        if sample:
+            sample_images_cluster_fig, axes = plt.subplots(sample_plot_images.size, 1,
+                                                           figsize=(5, sample_plot_images.size * 5))
+
+        for n in range(sample_plot_images.size):
+            i = sample_plot_images[n]
+            stripes_pic = np.where(self.stripes[:, 2] == i)[0]
+            stripes_pic = self.stripes[stripes_pic, 0:2]
+            stripes_rot = self.set_pca.transform(stripes_pic)
+
+            pca_pic = PCA(n_components=2).fit(stripes_pic)
+            picRotation = np.degrees(np.arccos(pca_pic.components_[0, 0]))
+
+            pic_eps = int((stripes_pic[:, 0].max() - stripes_pic[:, 0].min()) * pic_eps_multiplier)
+            if pic_eps < 2:
+                pic_eps = 2
+            pic_min = int(stripes_pic.size * pic_min_multiplier)
+            if pic_min < 2:
+                pic_min = 2
+
+            stripe_clusters = DBSCAN(eps=pic_eps, min_samples=pic_min).fit(stripes_rot)
+
+            cluster_points = []
+            for cluster in np.unique(stripe_clusters.labels_):
+                if cluster > -1:
+                    points = stripes_rot[np.where(stripe_clusters.labels_ == cluster)[0], :]
+                    cluster_points.append(points)
+                clusterPoints_dict[i] = cluster_points
+
             if sample:
-                step = int(np.unique(stripes[:, 2]).size / plotSamples)
-                plotIndex = []
-                i = 0
-                for i in range(plotSamples):
-                    plotIndex.append(int(i * step))
+                for i in np.unique(stripe_clusters.labels_):
+                    if i > -1:
+                        axes[n].scatter(stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 1],
+                                        stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 0])
+                    else:
+                        axes[n].scatter(stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 1],
+                                        stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 0], marker='*',
+                                        color='black')
 
-                sample_plot_images = np.unique(stripes[:, 2])[plotIndex]
+                axes[n].set_title('Image No. ' + str(sample_plot_images[n]) + '\n' +
+                                  'Image Rotation = ' + str(np.abs(picRotation - self.setRotation_degrees)) + '\n' +
+                                  'Pic Eps = ' + str(pic_eps) + ' -- Pic Min = ' + str(pic_min))
+                axes[n].set_xticks([])
+                axes[n].set_yticks([])
+
+        self.clusterPoints_dict = clusterPoints_dict
+
+
+class Fit_Spline_Calc:
+    def __init__(self, clusterPoints_dict, origShape, setPCA):
+        self.clusterPoints_dict = clusterPoints_dict
+        self.origShape = origShape
+        self.setPCA = setPCA
+
+    def Fit_Splines(self, plotSpline,  linearInterp_threshold_multiplier, minPoint_filter, weightsFilter_quantile,):
+        self.linearInterp_threshold_multiplier = linearInterp_threshold_multiplier
+        self.minPoint_filter = minPoint_filter
+        self.weightsFilter_quantile = weightsFilter_quantile
+
+        splines_set = {}
+        points_to_fit_weights = {}
+
+        for pic in self.clusterPoints_dict.keys():
+            splines_set[pic] = []
+            points_to_fit_weights[pic] = []
+
+            for i in range(len(self.clusterPoints_dict[pic])):
+                points_to_fit = self.clusterPoints_dict[pic][i]
+                x = points_to_fit[:, 0]
+                y = points_to_fit[:, 1]
+                x_unique = np.arange(int(np.min(x)), int(np.max(x)), 1)
+                y_unique = []
+                y_min_plot = []
+                y_max_plot = []
+                weights = []
+                for val in x_unique:
+
+                    ind = np.where(np.all([[x > val - 0.49], [x < val + 0.51]], axis=0))[1]
+                    y_sample = y[ind]
+                    if y_sample.size == 0:
+                        y_median = 0
+                        weight = 0
+                        y_min = 0
+                        y_max = 0
+
+                    else:
+                        y_min = np.min(y_sample)
+                        y_max = np.max(y_sample)
+                        y_range = (y_max - y_min) + 1
+                        weight = y_sample.size / y_range
+                        y_median = np.median(y_sample)
+
+                    if weight > 1:
+                        weight = 1
+                    y_unique.append(y_median)
+                    weights.append(weight)
+                    y_min_plot.append(y_min)
+                    y_max_plot.append(y_max)
+                weights = np.asarray(weights)
+
+                weightsFilter_limit = np.quantile(weights[np.where(weights > 0)[0]], weightsFilter_quantile)
+
+                if weightsFilter_limit == 1:
+                    weightsFilter_limit = 0.99
+
+                weightsFiltered = np.where(weights >= weightsFilter_limit, weights, np.zeros_like(weights))
+                if x_unique.shape[0] > minPoint_filter:
+                    if x_unique.shape[0] > self.origShape[0] * linearInterp_threshold_multiplier:
+                        spline = UnivariateSpline(x_unique, y_unique, w=weights, s=len(weights))
+
+                    else:
+                        spline = UnivariateSpline(x_unique, y_unique, w=weights, s=len(weights), k=1)
+
+                    spline = [spline, int(np.min(x)), int(np.max(x))]
+                    splines_set[pic].append(spline)
+                    points_to_fit_weights[pic].append([x_unique, y_unique, weights])
+
+                if plotSpline:
+                    plot_x = np.arange(np.min(x_unique), np.max(x_unique), 1)
+                    plot_y = spline[0](plot_x)
+
+                    weights_filterPlot, axes = plt.subplots(3, len(self.clusterPoints_dict[pic]),
+                                                            figsize=(5 * len(self.clusterPoints_dict[pic]), 15))
+                    axes[0, i].hist(weights)
+                    axes[0, i].set_yscale('log')
+                    axes[0, i].vlines(weightsFilter_limit, 0, 10, colors='r')
+                    axes[0, i].set_title("Cluster # " + str(i) + '\n'
+                                                                 'weightFilter_limit = ' + str(weightsFilter_limit))
+                    axes[1, i].hist(weightsFiltered[np.where(weightsFiltered > 0)[0]])
+                    axes[1, i].set_yscale('log')
+                    axes[1, i].vlines(weightsFilter_limit, 0, 10, colors='r')
+                    axes[2, i].plot(plot_x, plot_y, color='b')
+                    axes[2, i].plot(x_unique, y_min_plot, 'o', markersize=0.2, color='red')
+                    axes[2, i].plot(x_unique, y_max_plot, 'o', markersize=0.2, color='green')
+
+                self.splines_set = splines_set
+                self.points_to_fit_weights = points_to_fit_weights
+
+    def Link_Splines(self,plotSpline, splineWalkDist, gradTollerance, posTolerance):
+        self.splineWalkDist = splineWalkDist
+        self.gradTollerance = gradTollerance
+        self.posTolerance = posTolerance
+
+        clustersToJoin_set = {}
+        splines_set = self.splines_set
+        points_to_fit_weights = self.points_to_fit_weights
+
+        if plotSpline:
+            splinesWalk_plot, axes = plt.subplots(len(splines_set.keys()), 3,
+                                                  figsize=(15, 5 * len(splines_set.keys())))
+
+        for i in range(len(splines_set.keys())):
+            pic = list(splines_set.keys())[i]
+            clustersToJoin = []
+            splines = splines_set[pic]
+
+            if plotSpline:
+                for spline in splines:
+                    plot_x = np.arange(spline[1], spline[2], 1)
+                    plot_y = spline[0](plot_x)
+                    axes[i, 0].plot(plot_y, plot_x)
+                    axes[i, 0].set_title("i = " + str(i) + "\n" + "key = " + str(pic))
+
+                for spline in splines:
+                    plot_x_walk = np.arange(spline[1] - splineWalkDist, spline[2] + splineWalkDist, 1)
+                    plot_y_walk = spline[0](plot_x_walk)
+                    axes[i, 1].plot(plot_y_walk, plot_x_walk)
+                    axes[i, 1].set_title("i = " + str(i) + "\n" + "key = " + str(pic))
+
+            for n in range((len(splines_set[pic]))):
+                for m in range(n, (len(splines_set[pic]))):
+                    if n != m:
+
+                        x_min = np.min(
+                            [splines_set[pic][n][1] - splineWalkDist, splines_set[pic][n][2] + splineWalkDist,
+                             splines_set[pic][n][1] - splineWalkDist, splines_set[pic][n][2] + splineWalkDist])
+                        x_max = np.max(
+                            [splines_set[pic][n][1] - splineWalkDist, splines_set[pic][n][2] + splineWalkDist,
+                             splines_set[pic][n][1] - splineWalkDist, splines_set[pic][n][2] + splineWalkDist])
+                        x1_min = np.min(
+                            [splines_set[pic][n][1] - splineWalkDist, splines_set[pic][n][2] + splineWalkDist])
+                        x1_max = np.max(
+                            [splines_set[pic][n][1] - splineWalkDist, splines_set[pic][n][2] + splineWalkDist])
+                        x2_min = np.min(
+                            [splines_set[pic][m][1] - splineWalkDist, splines_set[pic][m][2] + splineWalkDist])
+                        x2_max = np.max(
+                            [splines_set[pic][m][1] - splineWalkDist, splines_set[pic][m][2] + splineWalkDist])
+                        # x1 = np.arange(x1_min,x1_max,posTolerance)
+                        # x2 = np.arange(x2_min,x2_max,posTolerance)
+                        x = np.arange(x_min, x_max, posTolerance)
+                        y1 = splines_set[pic][n][0](x)
+                        y2 = splines_set[pic][m][0](x)
+
+                        intersects = np.where(np.abs(y1 - y2) < posTolerance)[0]
+                        x_intersects = x[intersects]
+                        derivative_1 = splines_set[pic][n][0].derivative()(x_intersects)
+                        derivative_2 = splines_set[pic][m][0].derivative()(x_intersects)
+
+                        derivate_dif = derivative_1 / derivative_2
+
+                        if np.any(
+                                np.all([[derivate_dif < gradTollerance], [derivate_dif > (1 / gradTollerance)]],
+                                       axis=0)):
+                            clustersToJoin.append([n, m])
+
+                        print('n = ' + str(n) + ' m = ' + str(m) + ' length = ' + str(intersects.shape))
+
+            clustersToJoin_set[pic] = clustersToJoin
+
+            pairs = clustersToJoin_set[pic]
+
+            toPop = []
+
+            for pair in pairs:
+                print(pair)
+                newMin = np.min([splines_set[pic][pair[0]][1], splines_set[pic][pair[1]][1]])
+                newMax = np.max([splines_set[pic][pair[0]][2], splines_set[pic][pair[1]][2]])
+
+                if points_to_fit_weights[pic][pair[0]][0][0] < points_to_fit_weights[pic][pair[1]][0][0]:
+                    newX = np.concatenate(
+                        (points_to_fit_weights[pic][pair[0]][0], points_to_fit_weights[pic][pair[1]][0]))
+                    newY = np.concatenate(
+                        (points_to_fit_weights[pic][pair[0]][1], points_to_fit_weights[pic][pair[1]][1]))
+                    newWeights = np.concatenate(
+                        (points_to_fit_weights[pic][pair[0]][2], points_to_fit_weights[pic][pair[1]][2]))
+                elif points_to_fit_weights[pic][pair[0]][0][0] > points_to_fit_weights[pic][pair[1]][0][0]:
+                    newX = np.concatenate(
+                        (points_to_fit_weights[pic][pair[1]][0], points_to_fit_weights[pic][pair[0]][0]))
+                    newY = np.concatenate(
+                        (points_to_fit_weights[pic][pair[1]][1], points_to_fit_weights[pic][pair[0]][1]))
+                    newWeights = np.concatenate(
+                        (points_to_fit_weights[pic][pair[1]][2], points_to_fit_weights[pic][pair[0]][2]))
+                newX = newX[np.unique(newX, return_index=True)[1]]
+                newY = newY[np.unique(newX, return_index=True)[1]]
+                newWeights = newWeights[np.unique(newX, return_index=True)[1]]
+
+                newSpline = UnivariateSpline(newX, newY, w=newWeights, s=len(newWeights))
+                splines_set[pic].append([newSpline, newMin, newMax])
+                toPop.append(int(pair[0]))
+                toPop.append(int(pair[1]))
+
+            toPop = sorted(toPop, reverse=True)
+            for pop in toPop:
+                splines_set[pic].pop(pop)
+
+            splines = splines_set[pic]
+            if plotSpline:
+                for spline in splines:
+                    plot_x = np.arange(spline[1], spline[2], 1)
+                    plot_y = spline[0](plot_x)
+                    axes[i, 2].plot(plot_y, plot_x)
+                    axes[i, 2].set_title("i = " + str(i) + "\n" + "key = " + str(pic))
+
+        self.splines_set_link = splines_set
+
+    def Filter_Splines(self, numberStripes):
+
+        self.numberStripes = numberStripes
+
+        splines_set = self.splines_set_link
+
+
+        for n in range(len(splines_set.keys())):
+            print('\n')
+            pic = list(splines_set.keys())[n]
+            print(pic)
+
+            zeroValue = []
+            splineRanges = []
+            orderByZero = []
+
+            for i in range(len(splines_set[pic])):
+                if (abs(splines_set[pic][i][1]) / splines_set[pic][i][1]) == (
+                        abs(splines_set[pic][i][1]) / splines_set[pic][i][1]):
+                    orderByZero_loop = False
+                    if splines_set[pic][i][1] > 0:
+                        zeroInput = np.min([splines_set[pic][i][1], splines_set[pic][i][2]])
+                    elif splines_set[pic][i][1] < 0:
+                        zeroInput = np.max([splines_set[pic][i][1], splines_set[pic][i][2]])
+
+                else:
+                    zeroInput = 0
+                    orderByZero_loop = True
+
+                if (splines_set[pic][i][2] - splines_set[pic][i][1]) > 3:
+                    if not np.isnan(splines_set[pic][i][0](zeroInput)):
+                        orderByZero.append(orderByZero_loop)
+                        zeroValue.append(int(splines_set[pic][i][0](zeroInput)))
+                        splineRanges.append(int(splines_set[pic][i][2] - splines_set[pic][i][1]))
+            print(orderByZero)
+            print(np.all(orderByZero))
+            orderByZero = np.all(orderByZero)
+            zeroValue = np.asarray([zeroValue])
+            splineRanges = np.asarray([splineRanges])
+            print(zeroValue)
+            print(splineRanges)
+            splineRanges_raw = splineRanges
+            zerosDecending = (np.shape(zeroValue)[1] * 0.5) < np.shape(np.where(np.diff(zeroValue) < 0)[0])[0]
+
+            rangeDecending = (np.shape(splineRanges)[1] * 0.5) < np.shape(np.where(np.diff(splineRanges) < 0)[0])[0]
+            zeroValue_ind = np.argsort(zeroValue)[0]
+            splineRanges_ind = np.argsort(splineRanges)[0]
+            finalSplines = []
+            if zerosDecending != rangeDecending:
+                zeroValue_ind = np.flip(zeroValue_ind)
+            if np.where(zeroValue_ind == splineRanges_ind)[0].shape[0] >= numberStripes:
+                splineRanges = np.flip(splineRanges[0, np.where(zeroValue_ind == splineRanges_ind)[0]])[
+                    0:numberStripes]
+                print("reducing stripes by matching")
+
+            elif orderByZero:
+                splineRanges = np.flip(splineRanges[0, zeroValue_ind])
+                print('keeping all stripes, sort by zero values')
+                print(splineRanges)
+
             else:
-                sample_plot_images = np.unique(stripes[:, 2])
+                splineRanges = np.flip(splineRanges[0, splineRanges_ind])
+                print('keeping all stripes, sort by spline Ranges')
+                print(splineRanges)
 
-            if sample:
-                sample_images_cluster_fig, axes = plt.subplots(sample_plot_images.size, 1,
-                                                               figsize=(5, sample_plot_images.size * 5))
+            print(splineRanges.shape[0])
+            if splineRanges.shape[0] > numberStripes:
+                print("blunt stripe by range")
+                splineRanges = splineRanges[0:numberStripes]
+                print(splineRanges)
 
-            for n in range(sample_plot_images.size):
-                i = sample_plot_images[n]
-                stripes_pic = np.where(stripes[:, 2] == i)[0]
-                stripes_pic = stripes[stripes_pic, 0:2]
-                stripes_rot = pca.transform(stripes_pic)
+            for splineRange in splineRanges:
+                finalSplines.append(splines_set[pic][np.where(splineRanges_raw == splineRange)[1][0]])
 
-                pca_pic = PCA(n_components=2).fit(stripes_pic)
-                picRotation = np.degrees(np.arccos(pca_pic.components_[0, 0]))
+            splines_set[pic] = finalSplines
 
-                pic_eps = int((stripes_pic[:, 0].max() - stripes_pic[:, 0].min()) * pic_eps_multiplier)
-                if pic_eps < 2:
-                    pic_eps = 2
-                pic_min = int(stripes_pic.size * pic_min_multiplier)
-                if pic_min < 2:
-                    pic_min = 2
+        self.splines_set_final = splines_set
 
-                stripe_clusters = DBSCAN(eps=pic_eps, min_samples=pic_min).fit(stripes_rot)
+    def Calc_Properties(self):
+        splines_set = self.splines_set_final
+        pca = self.setPCA
 
-                cluster_points = []
-                for cluster in np.unique(stripe_clusters.labels_):
-                    if cluster > -1:
-                        points = stripes_rot[np.where(stripe_clusters.labels_ == cluster)[0], :]
-                        cluster_points.append(points)
-                    clusterPoints_dict[i] = cluster_points
+        stripe_properties = {}
 
-                if sample:
-                    for i in np.unique(stripe_clusters.labels_):
-                        if i > -1:
-                            axes[n].scatter(stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 1],
-                                            stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 0])
-                        else:
-                            axes[n].scatter(stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 1],
-                                            stripes_rot[np.where(stripe_clusters.labels_ == i)][:, 0], marker='*',
-                                            color='black')
+        for pic in splines_set.keys():
+            stripeStats = []
+            plot_points_ant = []
+            plot_points_stripe = []
 
-                    axes[n].set_title('Image No. ' + str(sample_plot_images[n]) + '\n' +
-                                      'Image Rotation = ' + str(np.abs(picRotation - setRotation_degrees)) + '\n' +
-                                      'Pic Eps = ' + str(pic_eps) + ' -- Pic Min = ' + str(pic_min))
-                    axes[n].set_xticks([])
-                    axes[n].set_yticks([])
+            if len(splines_set[pic]) > 0:
+                try:
+                    for stripeNo in range(len(splines_set[pic])):
+                        x = np.arange(splines_set[pic][stripeNo][1], splines_set[pic][stripeNo][2], 1)
+                        y = splines_set[pic][stripeNo][0](x)
 
-            self.clusterPoints_dict = clusterPoints_dict
+                        points = np.transpose(np.array([x, y]))
+                        points_orig = pca.inverse_transform(points)
 
+                        plot_points_stripe.append(points_orig)
 
+                        twistVector = np.asarray(
+                            [points_orig[-1, 1] - points_orig[0, 1], points_orig[-1, 0] - points_orig[0, 0]])
+                        twistOrigin = np.asarray([points_orig[0, 1], points_orig[0, 0]])
+                        twist = np.arctan(twistVector[1] / twistVector[0])
+                        points_orig_matrix = np.matrix(np.transpose(points_orig))
+                        rot_matrix = np.matrix([[np.cos(twist), -1 * np.sin(twist)], [np.sin(twist), np.cos(twist)]])
+                        point_rot_matrix = np.matmul(rot_matrix, points_orig_matrix)
+                        mirror = False
+                        if np.max(point_rot_matrix[0] < 0):
+                            mirror = True
+                            point_rot_matrix[0] = point_rot_matrix[0] * -1
 
+                        draft_vector_rot = np.where(point_rot_matrix[0] > np.max(point_rot_matrix[0]) * 0.95)
+                        draft_vector_rot = point_rot_matrix[:, int(np.mean(draft_vector_rot[1]))]
+                        chord_rot = point_rot_matrix[1, -1] - point_rot_matrix[1, 0]
+                        draft_vector_rot_origin = np.matrix(point_rot_matrix[0, 0], draft_vector_rot[1, 0])
+                        draft = (draft_vector_rot[1, 0] - point_rot_matrix[1, 0]) / chord_rot
+                        camber = (draft_vector_rot[0, 0] - draft_vector_rot_origin) / chord_rot
+                        frontCamber_pos = (((draft_vector_rot[1, 0] - point_rot_matrix[1, 0]) / 2) + point_rot_matrix[1, 0])
+                        frontCamber_pos = np.where(np.all([point_rot_matrix[1, :] < (frontCamber_pos + 1), point_rot_matrix[1, :] > (frontCamber_pos - 1)], axis=0))[1]
+                        frontCamber = np.mean(point_rot_matrix[0, frontCamber_pos])
+                        frontCamber = (frontCamber - draft_vector_rot_origin[0]) / (draft_vector_rot[0] - draft_vector_rot_origin[0])
+                        backCamber_pos = (((point_rot_matrix[1, -1] - draft_vector_rot[1, 0]) / 2) + draft_vector_rot[1, 0])
+                        backCamber_pos = np.where(np.all([point_rot_matrix[1, :] < (backCamber_pos + 1),point_rot_matrix[1, :] > (backCamber_pos - 1)], axis=0))[1]
+                        backCamber = np.mean(point_rot_matrix[0, backCamber_pos])
+                        backCamber = (backCamber - draft_vector_rot_origin[0]) / (draft_vector_rot[0] - draft_vector_rot_origin[0])
+
+                        stripeStats.append([draft, camber[0, 0], frontCamber[0, 0], backCamber[0, 0]])
+
+                        rot_matrix_inv = np.transpose(rot_matrix)
+                        plotAnnotations_rot = np.asmatrix(
+                            [[draft_vector_rot_origin[0, 0], draft_vector_rot[0, 0], point_rot_matrix[0, 0],
+                              point_rot_matrix[0, -1]],
+                             [draft_vector_rot[1, 0], draft_vector_rot[1, 0], point_rot_matrix[1, 0],
+                              point_rot_matrix[1, -1]]])
+                        plotAnnotations = np.matmul(rot_matrix_inv, plotAnnotations_rot)
+                        plotAnnotations = np.asarray(np.transpose(plotAnnotations))
+
+                        plot_points_ant.append(plotAnnotations)
+
+                except:
+                    print("failed on " + str(stripeNo) + " on " + str(pic))
+
+            stripe_properties[pic] = [plot_points_stripe, plot_points_ant, stripeStats]
+
+        self.stripe_properties = stripe_properties
 
 
 
