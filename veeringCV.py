@@ -12,6 +12,10 @@ from sklearn.cluster import DBSCAN
 from sklearn.decomposition import PCA
 from scipy.interpolate import UnivariateSpline
 import logging
+import os
+import piexif
+from datetime import datetime
+import pandas as pd
 
 class VeeringNormalisation:
     def __init__(self, filePath):
@@ -100,9 +104,7 @@ class VeeringNormalisation:
         self.pixcels[:,1,:] = self.pixcels[:,1,:] * green_norm_multiplier
         self.pixcels[:,2,:] = self.pixcels[:,2,:] * blue_norm_multiplier
 
-
 ##3
-
     def RGB_Chrom_Normalise(self):
         pixcels_sum  = np.sum(self.pixcels ,axis=1)
         for i in [0,1,2]:
@@ -408,7 +410,6 @@ class Thresholding:
         self.CNT_cleanPlot, self.axes = plt.subplots(1, 1, figsize=(3,3))
         self.axes.plot(self.stripes[:, 1], self.stripes[:, 0], 'o', markersize=.1, color='blue')
 
-
 class Set_DB:
     def __init__(self, stripes, multipliers, countFilter_ind, clusterOffset):
         self.stripes = stripes
@@ -503,9 +504,7 @@ class Set_DB:
 
     def Make_DB_Scan_Set(self):
         toKeep = []
-        print(len(self.cluster_filter))
         for i in range(len(self.cluster_filter)):
-            print(i)
             toKeep.append(list(np.where(self.stripe_clusters_set.labels_[self.inv] == self.cluster_filter[i])[0]))
 
         toKeep = [item for sublist in toKeep for item in sublist]
@@ -582,7 +581,6 @@ class Pic_DB:
                 axes[n].set_yticks([])
 
         self.clusterPoints_dict = clusterPoints_dict
-
 
 class Fit_Spline_Calc:
     def __init__(self, clusterPoints_dict, origShape, setPCA):
@@ -899,11 +897,17 @@ class Fit_Spline_Calc:
                         rot_matrix = np.matrix([[np.cos(twist), -1 * np.sin(twist)], [np.sin(twist), np.cos(twist)]])
                         point_rot_matrix = np.matmul(rot_matrix, points_orig_matrix)
                         mirror = False
-                        if np.max(point_rot_matrix[0] < 0):
+                        if point_rot_matrix[0,int(point_rot_matrix.shape[1]/2)] < point_rot_matrix[0,0]:
                             mirror = True
+                            print(str(pic) + ": " + str(stripeNo) + ": " +"mirror")
                             point_rot_matrix[0] = point_rot_matrix[0] * -1
 
-                        draft_vector_rot = np.where(point_rot_matrix[0] > np.max(point_rot_matrix[0]) * 0.95)
+                        if np.max(point_rot_matrix[0]) > 0:
+                            multiplier = 0.95
+                        else:
+                            multiplier = 1.05
+
+                        draft_vector_rot = np.where(point_rot_matrix[0] > np.max(point_rot_matrix[0]) * multiplier)
                         draft_vector_rot = point_rot_matrix[:, int(np.mean(draft_vector_rot[1]))]
                         chord_rot = point_rot_matrix[1, -1] - point_rot_matrix[1, 0]
                         draft_vector_rot_origin = np.matrix(point_rot_matrix[0, 0], draft_vector_rot[1, 0])
@@ -938,6 +942,100 @@ class Fit_Spline_Calc:
 
         self.stripe_properties = stripe_properties
 
+class Export_Results:
+    def __init__(self,images, timeStamps, path_to_h5):
+        self.pic_origShape = images.origShape
+        images = np.reshape(images.pixcels, self.pic_origShape, order='F')
+        self.images = images
+        self.timeStamps = timeStamps
+        exportDirectory, h5 = os.path.split(path_to_h5)
+        exportPath = os.path.join(exportDirectory, "autScan_output")
+        if not os.path.exists(exportPath):
+            os.makedirs(exportPath)
+        self.exportPath = exportPath
 
+    def Export_Images(self, splines_set, stripe_properties,exportFormats):
 
+        textStart = self.pic_origShape[0] * 1.1
+        text_vert = self.pic_origShape[0] * .1
+        text_horz = self.pic_origShape[1] * .18
+        stripeLables = ['1/4', '1/2', '3/4', '7/8']
+        picture = self.images
+        for i in range(len(splines_set.keys())):
+            pic = list(splines_set.keys())[i]
+            plot_points_stripe = stripe_properties[pic][0]
+            plot_points_ant = stripe_properties[pic][1]
+            stripeStats = stripe_properties[pic][2]
 
+            plt.imshow(picture[:, :, :, pic].astype('uint8'))
+            for points_orig in plot_points_stripe:
+                plt.plot(points_orig[:, 1], points_orig[:, 0], color='lime', linestyle='-', linewidth=2)
+                # plt.title(features.timestamps[pic])
+                plt.xticks([])
+                plt.yticks([])
+            for plotAnnotations in plot_points_ant:
+                plt.plot(plotAnnotations[2:4, 1], plotAnnotations[2:4, 0], color='red', linestyle='-', linewidth=1)
+                plt.plot(plotAnnotations[4:6, 1], plotAnnotations[4:6, 0], color='blue', linestyle='-', linewidth=1)
+                plt.plot(plotAnnotations[0:2, 1], plotAnnotations[0:2, 0], color='yellow', linestyle='-', linewidth=1)
+
+            horiz_start = 50
+            headers = ["Stripe", "Draft", "Camber", "Front Camber", "Back Camber"]
+
+            for n in range(5):
+                plt.text(horiz_start + text_horz * n, textStart, headers[n])
+
+            vert_count = 1
+            for n in range(len(stripeStats)):
+                plt.text(horiz_start + text_horz * 0, textStart + text_vert * vert_count, stripeLables[n])
+                plt.text(horiz_start + text_horz * 1, textStart + text_vert * vert_count,
+                         round(stripeStats[n][0] * 100, 2))
+                plt.text(horiz_start + text_horz * 2, textStart + text_vert * vert_count,
+                         round(stripeStats[n][1] * 100, 2))
+                plt.text(horiz_start + text_horz * 3, textStart + text_vert * vert_count,
+                         round(stripeStats[n][2] * 100, 2))
+                plt.text(horiz_start + text_horz * 4, textStart + text_vert * vert_count,
+                         round(stripeStats[n][3] * 100, 2))
+                vert_count += 1
+
+            s = ''
+            fileName = str(pic)
+
+            for format in exportFormats:
+                if format == ".pdf":
+                    if not os.path.isdir(os.path.join(self.exportPath, 'pdf')):
+                        os.mkdir(os.path.join(self.exportPath, 'pdf'))
+
+                    filePath = os.path.join(self.exportPath, 'pdf', str(fileName) + str(format))
+                    plt.savefig(filePath, dpi=600, bbox_inches='tight')
+
+                elif format == '.jpg':
+                    if not os.path.isdir(os.path.join(self.exportPath, 'jpg')):
+                        os.mkdir(os.path.join(self.exportPath,'jpg'))
+                    filePath = os.path.join(self.exportPath, 'jpg', str(fileName) + str(format))
+                    plt.savefig(filePath, dpi=1000, bbox_inches='tight')
+                    exif_dict = {'0th': {306: self.timeStamps[pic]}}
+                    exif_bytes = piexif.dump(exif_dict)
+                    piexif.insert(exif_bytes, filePath)
+            plt.clf()
+
+    def Export_Data_CSV(self, stripe_properties, stripeCount):
+        column_labels = ['timeStamp', '25_draft', '25_camber', '25_frontCamber', '25_backCamber', '50_draft',
+                   '50_camber', '50_frontCamber', '50_backCamber', '75_draft', '75_camber',
+                   '75_frontCamber', '75_backCamber', '87_draft', '87_camber', '87_frontCamber',
+                   '87_backCamber']
+        column_labels = column_labels[0:(4*stripeCount)+1]
+        forDF = []
+        for pic in list(stripe_properties.keys()):
+            vals = []
+            ts = self.timeStamps[pic]
+            decoded_string = ts.decode('utf-8')
+            dt_object = datetime.strptime(decoded_string, '%Y:%m:%d %H:%M:%S')
+            string_time = dt_object.strftime('%Y-%m-%d %H:%M:%S')
+            vals.append(string_time)
+            for stripe in stripe_properties[pic][2]:
+                for val in stripe:
+                    vals.append(val)
+            forDF.append(vals)
+        export_data = pd.DataFrame(forDF)
+        export_data.columns = column_labels
+        export_data.to_csv(os.path.join(self.exportPath, 'data.csv'), index=False)

@@ -15,6 +15,7 @@ from PIL import Image
 from PIL import ImageTk
 import numpy as np
 import h5py
+from matplotlib import pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 import veeringVideo
@@ -2546,10 +2547,20 @@ class   Autoscan_Frame(tk.Frame):
         print(self.thresholds.threshold)
 
     def SetDBScan(self):
-        print("Setting DB Scan")
+        multipliers = [float(self.set_eps_mult_stringVar.get()), float(self.set_min_mult_stringVar.get())]
+        self.set_db = veeringCV.Set_DB(self.thresholds.stripes, multipliers, self.thresholds.countFilter_ind, int(self.cluster_offset_stringVar.get()))
+        self.set_db.Set_PCA_DB()
+        self.set_db.Make_DB_Scan_Set()
 
     def Check_Set_DBScan(self):
-        print("Checking DB Scan")
+        multipliers = [float(self.set_eps_mult_stringVar.get()), float(self.set_min_mult_stringVar.get())]
+        self.set_db = veeringCV.Set_DB(self.thresholds.stripes, multipliers, self.thresholds.countFilter_ind,
+                                       int(self.cluster_offset_stringVar.get()))
+        self.set_db.Set_PCA_DB()
+        self.set_db.Cluster_Filter_FIG()
+        self.set_db.Cluster_Plot_FIG()
+        self.plot_comb, axes = plt.subplots(2,1)
+        Graph_Popup(self, "Set DB Scan", self.set_db.cluster_Plot, "inspection", self.index_stringVar.get())
 
     def Check_Pic_DBScan(self):
         print("Checking Pic DB Scan")
