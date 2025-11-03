@@ -2390,7 +2390,8 @@ class   Autoscan_Frame(tk.Frame):
         self.offset_sweep_button = tk.Button(self, text="Offset Sweep", command=self.Open_Offset_Sweep)
         self.count_cleaning_graphs_button = tk.Button(self, text="Count Cleaning Graphs", command=self.Count_Cleaning_Graphs)
         self.generate_pixcels_button = tk.Button(self, text="Generate Pixcels", command=self.Generate_pixcels)
-        self.check_set_dbScan_button = tk.Button(self, text="Check Set DB Scan", command=self.Check_Set_DBScan)
+        self.check_set_dbScan_filter_button = tk.Button(self, text="Check Set DB Scan", command=self.Check_Set_DBScan_Filter)
+        self.check_set_dbScan_cluster_button = tk.Button(self, text="Check Set DB Scan", command=self.Check_Set_DBScan_Cluster)
         self.set_dbScan_button = tk.Button(self, text="Run DB Scan on Set", command=self.SetDBScan)
         self.check_pic_dbScan_button = tk.Button(self, text="Check PIC DB Scan", command=self.Check_Pic_DBScan)
         self.pic_dbScan_button = tk.Button(self, text="Run DB Scan on Pics", command=self.Run_Pic_DBScan)
@@ -2466,7 +2467,8 @@ class   Autoscan_Frame(tk.Frame):
         self.set_min_mult_entry.grid(row=14, column=1, sticky=tk.W)
         self.cluster_offset_label.grid(row=15, column=0, sticky=tk.E)
         self.cluster_offset_combo.grid(row=15, column=1, sticky=tk.W)
-        self.check_set_dbScan_button.grid(row=15, column=2)
+        self.check_set_dbScan_filter_button.grid(row=14, column=2)
+        self.check_set_dbScan_cluster_button.grid(row=15, column=2)
         self.set_dbScan_button.grid(row=16, column=1, padx=15, pady=10)
         self.pic_eps_mult_label.grid(row=17, column=0, sticky=tk.E)
         self.pic_eps_mult_entry.grid(row=17, column=1, sticky=tk.W)
@@ -2543,36 +2545,59 @@ class   Autoscan_Frame(tk.Frame):
         self.thresholds.Count_Filter(float(self.count_filter_lower_entry.get()),float(self.count_filter_upper_entry.get()))
         self.thresholds.Stripes_Plot_Clean()
         self.generate_pixcels_run_bool.set(True)
-        self.Make_Plot(self.thresholds.CNT_cleanPlot,[3,4],[4,4])
+        #self.Make_Plot(self.thresholds.CNT_cleanPlot,[3,4],[4,4])
         print(self.thresholds.threshold)
 
     def SetDBScan(self):
         multipliers = [float(self.set_eps_mult_stringVar.get()), float(self.set_min_mult_stringVar.get())]
         self.set_db = veeringCV.Set_DB(self.thresholds.stripes, multipliers, self.thresholds.countFilter_ind, int(self.cluster_offset_stringVar.get()))
         self.set_db.Set_PCA_DB()
-        self.set_db.Make_DB_Scan_Set()
+        self.stripes_db, self.setPCA = self.set_db.Make_DB_Scan_Set()
 
-    def Check_Set_DBScan(self):
+    def Check_Set_DBScan_Filter(self):
         multipliers = [float(self.set_eps_mult_stringVar.get()), float(self.set_min_mult_stringVar.get())]
         self.set_db = veeringCV.Set_DB(self.thresholds.stripes, multipliers, self.thresholds.countFilter_ind,
                                        int(self.cluster_offset_stringVar.get()))
         self.set_db.Set_PCA_DB()
         self.set_db.Cluster_Filter_FIG()
+        Graph_Popup(self, "Set DB Scan Filter", self.set_db.cluster_filterFig, "inspection", self.index_stringVar.get())
+
+    def Check_Set_DBScan_Cluster(self):
+        multipliers = [float(self.set_eps_mult_stringVar.get()), float(self.set_min_mult_stringVar.get())]
+        self.set_db = veeringCV.Set_DB(self.thresholds.stripes, multipliers, self.thresholds.countFilter_ind, int(self.cluster_offset_stringVar.get()))
+        self.set_db.Set_PCA_DB()
+        self.set_db.Cluster_Filter_FIG()
         self.set_db.Cluster_Plot_FIG()
-        self.plot_comb, axes = plt.subplots(2,1)
-        Graph_Popup(self, "Set DB Scan", self.set_db.cluster_Plot, "inspection", self.index_stringVar.get())
+        Graph_Popup(self, "Set DB Scan Filter", self.set_db.cluster_Plot, "inspection", self.index_stringVar.get())
 
     def Check_Pic_DBScan(self):
-        print("Checking Pic DB Scan")
+        multipliers = [float(self.pic_eps_mult_stringVar.get()), float(self.pic_min_mult_stringVar.get())]
+        self.pic_db = veeringCV.Pic_DB(self.stripes_db, self.set_db.setRotation_degrees, self.setPCA)
+        self.pic_db.Pic_DB_Scan(True, int(self.pic_db_samples_stringVar.get()), multipliers[0], multipliers[1])
+        Graph_Popup(self, "Picture DB Scan", self.pic_db.sample_images_cluster_fig, "inspection", self.index_stringVar.get())
 
     def Run_Pic_DBScan(self):
-        print("Running Pic DB Scan")
+        multipliers = [float(self.pic_eps_mult_stringVar.get()), float(self.pic_min_mult_stringVar.get())]
+        self.pic_db = veeringCV.Pic_DB(self.stripes_db, self.set_db.setRotation_degrees, self.setPCA)
+        self.pic_db.Pic_DB_Scan(False,25,multipliers[0], multipliers[1])
+        self.clusterPoints_dict = self.pic_db.clusterPoints_dict
 
     def Fit_Splines_Calc_Properties(self):
-        print("Fitting Splines Calc Properties")
+        self.fit_calc = veeringCV.Fit_Spline_Calc(self.pic_db.clusterPoints_dict, self.features.origShape, self.setPCA)
+        self.fit_calc.Fit_Splines(False, 0.1, 5, 0.1)
+        self.fit_calc.Link_Splines(False, 75, 1.25, 4)
+        self.fit_calc.Filter_Splines(int(self.stripe_count_stringVar.get()))
+        self.fit_calc.Calc_Properties()
 
     def Export_Results(self):
-        print("Exporting Results")
+        picture = veeringCV.VeeringNormalisation(self.path_to_h5_stringVar.get())
+        picture.RunNormalisation([0])
+        export_class = veeringCV.Export_Results(picture, self.features.timestamps, self.path_to_h5_stringVar.get())
+        export_class.Export_Images(self.fit_calc.splines_set_final, self.fit_calc.stripe_properties, ['.pdf', '.jpg'])
+        export_class.Export_Data_CSV(self.fit_calc.stripe_properties, int(self.stripe_count_stringVar.get()))
+        export_class.Export_HyperParams("GUI", self.thresholds.targetColour, self.features.normalisation, self.thresholds.threshold_offset, self.thresholds.threshold, self.thresholds.threshold, self.thresholds.lowerBound,
+                                        self.thresholds.upperBound, self.set_db.set_eps_multiplier, self.set_db.set_min_multiplier, self.set_db.clusterOffset, self.pic_eps_mult_stringVar.get(), self.pic_min_mult_stringVar.get(),
+                                        self.stripe_count_stringVar.get(), self.path_to_h5_stringVar.get())
 
     def Enter_SQL_Credentials(self):
         print("Entering SQL Credentials")

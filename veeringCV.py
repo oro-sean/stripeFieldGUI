@@ -16,6 +16,8 @@ import os
 import piexif
 from datetime import datetime
 import pandas as pd
+import csv
+import math
 
 class VeeringNormalisation:
     def __init__(self, filePath):
@@ -81,6 +83,7 @@ class VeeringNormalisation:
         pixcelLength_normed_multiplier = pixcelLength_normed/self.pixcelLength
         for i in [0,1,2]:
             self.pixcels [:,i,:] = self.pixcels [:,i,:] * pixcelLength_normed_multiplier
+            np.where(self.pixcels[:,i,:]>255, self.pixcels[:,i,:], 255 )
 
 ##2
     def Colour_Normed(self):
@@ -101,14 +104,18 @@ class VeeringNormalisation:
         green_norm_multiplier = self.Normalise(self.pixcels[:,1,:], imgMean_green, setMean_green, imgStd_green, setStd_green)
         blue_norm_multiplier = self.Normalise(self.pixcels[:,0,:], imgMean_blue, setMean_blue, imgStd_blue, setStd_blue)
         self.pixcels[:,0,:] = self.pixcels[:,0,:] * red_norm_multiplier
+        np.where(self.pixcels[:, 0, :] > 255, self.pixcels[:, 0, :], 255)
         self.pixcels[:,1,:] = self.pixcels[:,1,:] * green_norm_multiplier
+        np.where(self.pixcels[:, 1, :] > 255, self.pixcels[:, 1, :], 255)
         self.pixcels[:,2,:] = self.pixcels[:,2,:] * blue_norm_multiplier
+        np.where(self.pixcels[:, 2, :] > 255, self.pixcels[:, 2, :], 255)
 
 ##3
     def RGB_Chrom_Normalise(self):
         pixcels_sum  = np.sum(self.pixcels ,axis=1)
         for i in [0,1,2]:
-            self.pixcels [:,i,:] = (self.pixcels[:,i,:]/pixcels_sum)*255
+            self.pixcels[:, i, :] = (self.pixcels[:,i,:]/pixcels_sum)*255
+
 
     def Calc_Normed_Properties(self):
         self.Calc_Pixcel_Length()
@@ -235,7 +242,6 @@ class Thresholding:
 
     def Calc_Distances(self):
         self.eucledianDistances = np.linalg.norm(self.targetColour - self.threshPix, axis=1)
-
 
     def Calc_Threshold(self):
         try:
@@ -536,7 +542,7 @@ class Pic_DB:
             sample_plot_images = np.unique(self.stripes[:, 2])
 
         if sample:
-            sample_images_cluster_fig, axes = plt.subplots(sample_plot_images.size, 1,
+            self.sample_images_cluster_fig, axes = plt.subplots(sample_plot_images.size, 1,
                                                            figsize=(5, sample_plot_images.size * 5))
 
         for n in range(sample_plot_images.size):
@@ -922,7 +928,7 @@ class Fit_Spline_Calc:
                         backCamber = np.mean(point_rot_matrix[0, backCamber_pos])
                         backCamber = (backCamber - draft_vector_rot_origin[0]) / (draft_vector_rot[0] - draft_vector_rot_origin[0])
 
-                        stripeStats.append([draft, camber[0, 0], frontCamber[0, 0], backCamber[0, 0]])
+                        stripeStats.append([draft, camber[0, 0], frontCamber[0, 0], backCamber[0, 0], np.degrees(twist)])
 
                         rot_matrix_inv = np.transpose(rot_matrix)
                         plotAnnotations_rot = np.asmatrix(
@@ -955,10 +961,9 @@ class Export_Results:
         self.exportPath = exportPath
 
     def Export_Images(self, splines_set, stripe_properties,exportFormats):
-
         textStart = self.pic_origShape[0] * 1.1
         text_vert = self.pic_origShape[0] * .1
-        text_horz = self.pic_origShape[1] * .18
+        text_horz = self.pic_origShape[1] * .15
         stripeLables = ['1/4', '1/2', '3/4', '7/8']
         picture = self.images
         for i in range(len(splines_set.keys())):
@@ -969,19 +974,19 @@ class Export_Results:
 
             plt.imshow(picture[:, :, :, pic].astype('uint8'))
             for points_orig in plot_points_stripe:
-                plt.plot(points_orig[:, 1], points_orig[:, 0], color='lime', linestyle='-', linewidth=2)
+                plt.plot(points_orig[:, 1], points_orig[:, 0], color='lime', linestyle='-', linewidth=0.5)
                 # plt.title(features.timestamps[pic])
                 plt.xticks([])
                 plt.yticks([])
             for plotAnnotations in plot_points_ant:
-                plt.plot(plotAnnotations[2:4, 1], plotAnnotations[2:4, 0], color='red', linestyle='-', linewidth=1)
-                plt.plot(plotAnnotations[4:6, 1], plotAnnotations[4:6, 0], color='blue', linestyle='-', linewidth=1)
-                plt.plot(plotAnnotations[0:2, 1], plotAnnotations[0:2, 0], color='yellow', linestyle='-', linewidth=1)
+                plt.plot(plotAnnotations[2:4, 1], plotAnnotations[2:4, 0], color='red', linestyle='-', linewidth=0.25)
+                plt.plot(plotAnnotations[4:6, 1], plotAnnotations[4:6, 0], color='blue', linestyle='-', linewidth=0.25)
+                plt.plot(plotAnnotations[0:2, 1], plotAnnotations[0:2, 0], color='yellow', linestyle='-', linewidth=0.25)
 
-            horiz_start = 50
-            headers = ["Stripe", "Draft", "Camber", "Front Camber", "Back Camber"]
+            horiz_start = 25
+            headers = ["Stripe", "Draft", "Camber", "FWD Cam", "BCK Cam", "Twist"]
 
-            for n in range(5):
+            for n in range(6):
                 plt.text(horiz_start + text_horz * n, textStart, headers[n])
 
             vert_count = 1
@@ -995,9 +1000,10 @@ class Export_Results:
                          round(stripeStats[n][2] * 100, 2))
                 plt.text(horiz_start + text_horz * 4, textStart + text_vert * vert_count,
                          round(stripeStats[n][3] * 100, 2))
+                plt.text(horiz_start + text_horz * 5, textStart + text_vert * vert_count,
+                         round(stripeStats[n][4],2))
                 vert_count += 1
 
-            s = ''
             fileName = str(pic)
 
             for format in exportFormats:
@@ -1006,24 +1012,26 @@ class Export_Results:
                         os.mkdir(os.path.join(self.exportPath, 'pdf'))
 
                     filePath = os.path.join(self.exportPath, 'pdf', str(fileName) + str(format))
-                    plt.savefig(filePath, dpi=600, bbox_inches='tight')
+                    plt.savefig(filePath, dpi=1000, bbox_inches='tight')
+                    print("Saved PDF of "+str(fileName))
 
                 elif format == '.jpg':
                     if not os.path.isdir(os.path.join(self.exportPath, 'jpg')):
                         os.mkdir(os.path.join(self.exportPath,'jpg'))
                     filePath = os.path.join(self.exportPath, 'jpg', str(fileName) + str(format))
                     plt.savefig(filePath, dpi=1000, bbox_inches='tight')
+                    print("Saved JPG of " + str(fileName))
                     exif_dict = {'0th': {306: self.timeStamps[pic]}}
                     exif_bytes = piexif.dump(exif_dict)
                     piexif.insert(exif_bytes, filePath)
             plt.clf()
 
     def Export_Data_CSV(self, stripe_properties, stripeCount):
-        column_labels = ['timeStamp', '25_draft', '25_camber', '25_frontCamber', '25_backCamber', '50_draft',
-                   '50_camber', '50_frontCamber', '50_backCamber', '75_draft', '75_camber',
-                   '75_frontCamber', '75_backCamber', '87_draft', '87_camber', '87_frontCamber',
-                   '87_backCamber']
-        column_labels = column_labels[0:(4*stripeCount)+1]
+        column_labels = ['timeStamp', '25_draft', '25_camber', '25_frontCamber', '25_backCamber', '25_twist', '50_draft',
+                   '50_camber', '50_frontCamber', '50_backCamber', '50_twist', '75_draft', '75_camber',
+                   '75_frontCamber', '75_backCamber', '75_twist', '87_draft', '87_camber', '87_frontCamber',
+                   '87_backCamber', '87_twist',]
+        column_labels = column_labels[0:(5*stripeCount)+1]
         forDF = []
         for pic in list(stripe_properties.keys()):
             vals = []
@@ -1039,3 +1047,18 @@ class Export_Results:
         export_data = pd.DataFrame(forDF)
         export_data.columns = column_labels
         export_data.to_csv(os.path.join(self.exportPath, 'data.csv'), index=False)
+
+    def Export_HyperParams(self, type, targetColour, norms, threshold_offset, threshold_calc,threshold_final,countClean_Min, countClean_Max,set_eps, set_min, set_clusterOffset, pic_eps, pic_min, numberStripes, h5_file):
+        data = [['type', type],
+        ['targetColour', targetColour],
+        ['norms', norms],
+        ['threshold_offset', threshold_offset,  'threshold_calc', threshold_calc, 'threshold_final', threshold_final],
+        ['countClean_Min', countClean_Min, 'countClean_Max', countClean_Max],
+        ['set_eps', set_eps, 'set_min', set_min, 'set_clusterOffset', set_clusterOffset],
+        ['pic_eps', pic_eps, 'pic_min', pic_min],
+        ['numberStripes', numberStripes],
+        ['h5_file', h5_file]]
+
+        with open(os.path.join(self.exportPath, 'hyperParams.csv'), 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerows(data)
