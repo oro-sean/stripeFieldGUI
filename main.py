@@ -837,7 +837,7 @@ class   Data_Cleaning_Top(tk.Frame):
         self.config(width=width, height=height)
 
         self.first_load_log = True
-        self.defaults = ['TWA', 'TWS', 'TWD', 'HDG', 'Heel', 'Trim', 'Rudder', 'Forestay', 'TmToGun', 'timeStamp']
+        self.defaults = ['TWA', 'TWS', 'TWD', 'HDG', 'Heel','Lat', 'Lon', 'Rudder', 'Forestay', 'TmToGun', 'timeStamp']
         self.combo_defaults = [3,0,1,8]
 
         ## define buttons
@@ -1896,9 +1896,19 @@ class   Visual_Picker(tk.Toplevel):
         self.top_scale = tk.Scale(self, orient='horizontal', length=self.canvas_width, from_=0,
                               to=self.canvas_width, command=self.On_Crop_Slider)
         self.top_scale.set(int(start_values[0]*self.scale))
+
+        self.top_scale_mask = tk.Scale(self, orient='horizontal', length=self.canvas_width, from_=0,
+                              to=self.canvas_width, command=self.On_Mask_Slider)
+        self.top_scale_mask.set(int(start_values[3]*self.scale))
+
         self.bottom_scale = tk.Scale(self, orient='horizontal', length=self.canvas_width, from_=0,
                                  to=self.canvas_width, command=self.On_Crop_Slider)
         self.bottom_scale.set(int(start_values[3]*self.scale))
+
+        self.bottom_scale_mask = tk.Scale(self, orient='horizontal', length=self.canvas_width, from_=0,
+                                 to=self.canvas_width, command=self.On_Mask_Slider)
+        self.bottom_scale_mask.set(int(start_values[3]*self.scale))
+
         self.left_scale = tk.Scale(self, orient='vertical', length=self.canvas_height, from_=0,
                                to=self.canvas_height, command=self.On_Crop_Slider)
         self.left_scale.set(int(start_values[1]*self.scale))
@@ -1925,12 +1935,13 @@ class   Visual_Picker(tk.Toplevel):
 
 
     ## Grid Canvas and scales
-        self.main_canvas.grid(column=1, row=1)
+        self.main_canvas.grid(column=1, row=2)
         self.top_scale.grid(column=1, row=0)
-        self.bottom_scale.grid(column=1, row=2)
-        self.left_scale.grid(column=0, row=1)
-        self.right_scale.grid(column=2, row=1)
-
+        self.top_scale_mask.grid(column=1, row=1)
+        self.bottom_scale.grid(column=1, row=4)
+        self.left_scale.grid(column=0, row=2)
+        self.right_scale.grid(column=2, row=2)
+        self.bottom_scale_mask.grid(column=1, row=3)
 
     def Display_Image(self):
         image = Image.open(self.file_path)
@@ -1957,6 +1968,9 @@ class   Visual_Picker(tk.Toplevel):
         self.crop_bottom_stringVar.set(str(int(self.right_scale.get()/self.scale)))
         self.crop_lhs_stringVar.set(str(int(self.top_scale.get()/self.scale)))
         self.crop_rhs_stringVar.set(str(int(self.bottom_scale.get()/self.scale)))
+
+    def On_Mask_Slider(self,*args):
+        print('On_Mask_Slider')
 
 class   Sail_Geometric_Properties(tk.Frame):
     def __init__(self, master,imgDir,sail,defaults, flip_rot):
@@ -1991,7 +2005,6 @@ class   Sail_Geometric_Properties(tk.Frame):
         self.image_count_stringVar = tk.StringVar()
         self.image_width_stringVar = tk.StringVar()
         self.image_height_stringVar = tk.StringVar()
-
 
         ## create checkboxes
         self.flip_horizontal_check = tk.Checkbutton(self, text="Flip Horizontal", variable=self.flip_horizontal_bool, onvalue=True, offvalue=False)
@@ -2181,8 +2194,8 @@ class   Geometric_Transforms_Frame(tk.Frame):
 
         self.sails = ['Port Main', 'Stb Main', 'Port Jib', 'Stb Jib']
 
-        defaults_crop = [[790,1200,2345,4290],[790,1200,2345,4290],[675,990,1660,2715],[675,990,1660,2715]]
-        defaults_flip_rot = [[False,False,False,False],[False,False,False,False],[False,False,False,False],[True,False,False,False]]
+        defaults_crop = [[790,1200,2345,4290],[790,1200,2345,4290],[1050,1410,2310,3930],[1050,1410,2310,3930]]
+        defaults_flip_rot = [[False,False,False,False],[False,False,False,False],[True,True,False,False],[True,True,False,False]]
 
         for i in range(len(self.geometric_properties_list)):
             if self.geometric_properties_list[i] == 'Disabled' and self.bools[i] == True:
@@ -2213,7 +2226,7 @@ class   Geometric_Transforms_Frame(tk.Frame):
 
         self.load_and_process_button.grid(row=i+1, column=5, padx=10, pady=10)
 
-    def Load_to_Array(self,file_path,crops):
+    def Load_to_Array(self,file_path,crops, rots):
         time_stamps = []
         file_names = os.listdir(file_path)
         file_names = [file for file in file_names if '.jpg' in file]
@@ -2228,6 +2241,15 @@ class   Geometric_Transforms_Frame(tk.Frame):
 
                 ts = image.getexif()[306]
                 time_stamps.append(ts)
+                if rots[0]:
+                    image = image.transpose(Image.FLIP_LEFT_RIGHT)
+                if rots[1]:
+                    image = image.transpose(Image.FLIP_TOP_BOTTOM)
+                if rots[2]:
+                    image = image.transpose(Image.ROTATE_90)
+                if rots[3]:
+                    image = image.transpose(Image.ROTATE_270)
+
                 image = image.crop(crops)
 
                 if i == 0:
@@ -2265,8 +2287,12 @@ class   Geometric_Transforms_Frame(tk.Frame):
                             int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_top_stringVar.get()),
                             int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_rhs_stringVar.get()),
                             int(app.mainframe.geometric_transfor_frame.geometric_properties_list[i].crop_bottom_stringVar.get())]
+                rots = [app.mainframe.geometric_transfor_frame.geometric_properties_list[i].flip_horizontal_bool.get(),
+                        app.mainframe.geometric_transfor_frame.geometric_properties_list[i].flip_vertical_bool.get(),
+                        app.mainframe.geometric_transfor_frame.geometric_properties_list[i].rotate_90_bool.get(),
+                        app.mainframe.geometric_transfor_frame.geometric_properties_list[i].rotate_270_bool.get()]
 
-                self.Load_to_Array(file_path, crops)
+                self.Load_to_Array(file_path, crops, rots)
                 file_path = head
                 self.Load_and_Process(file_path,self.sails[i])
 

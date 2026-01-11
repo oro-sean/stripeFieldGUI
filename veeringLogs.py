@@ -20,24 +20,19 @@ class VeeringLog:
             values = []
 
             for row in reader:
-                print("Iterate over rows")
                 print(row)
                 record ={}
                 for i in range(0,(len(row)-1),2):
                     print(i)
                     try:
-                        print("in Try")
                         key = row[i]
                         value = float(row[i+1])
                         record[key] = value
                     except:
                         print("error")
-                print("exit i")
                 values.append(record)
-                print("values appended")
 
         df = pd.DataFrame.from_records(values)
-        print("Made DF")
         df = df.rename(columns=columnLabels)
         self.log_df = df
 
@@ -54,6 +49,8 @@ class VeeringLog:
         self.log_df.dropna(subset=['Utc'], inplace=True)
         conv = lambda x: (datetime.datetime(1899,12,30) + datetime.timedelta(days=x)) + self.timeZone
         self.log_df['timeStamp'] = self.log_df['Utc'].apply(conv)
+        round = lambda x: x.replace(microsecond=0)
+        self.log_df['timeStamp'] = self.log_df['timeStamp'].apply(round)
 
     def Get_Filter_TS(self,portMin, portMax, stbMin, stbMax, var):
         upwindPort_all = set()
@@ -246,7 +243,7 @@ class VeeringEvent:
                                                     colNames=list(event_attrib[i][n].keys()),
                                                     colValues=list(event_attrib[i][n].values()),
                                                     fill=True)
-                        event_df.merge(new_df, on='timeStamp', how='outer')
+                        event_df = pd.concat([event_df, new_df], join='outer')
 
                 data_frames.append(event_df)
 

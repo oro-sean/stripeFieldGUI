@@ -138,7 +138,6 @@ class SailTimeLapse:
 
         self.file_names = file_names
 
-
     def Update_TS(self):
 
         self.timeLapse_startTime = self.timeLapse_endTime - self.timeLapse_timeStep * len(self.file_names)
@@ -197,7 +196,7 @@ class Rename_GP_TimeLapse:
             month = s.join(['0',str(self.finishTime.month)])
 
         else:
-            month = str(self.finishTime.day)
+            month = str(self.finishTime.month)
 
         if len(str(self.finishTime.day)) < 2:
             day = s.join(['0',str(self.finishTime.day)])

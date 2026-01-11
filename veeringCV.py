@@ -37,7 +37,6 @@ class VeeringNormalisation:
                                 np.power(self.pixcels[:,2,:],2)
                                 ,1/2)
 
-
     def Get_Pixcels(self):
         dataIn = h5py.File(self.filePath, 'r')
         pixcels = np.array(dataIn['IMG_ARRAY'], dtype='float32')
@@ -444,6 +443,7 @@ class Set_DB:
         self.cluster_counts = np.unique(self.stripe_clusters_set.labels_[self.inv], return_counts=True)
         self.cluster_counts = np.array([self.cluster_counts[1], self.cluster_counts[0]])
         self.cluster_counts_sorted = np.sort(self.cluster_counts)
+        print(len(self.cluster_counts_sorted))
 
         if (self.cluster_counts_sorted[0].max() / self.cluster_counts_sorted.sum()) > 0.98:
             self.cluster_count_cutoff = np.where(self.cluster_counts_sorted[0] == self.cluster_counts_sorted[0].max())[0]
@@ -485,7 +485,7 @@ class Set_DB:
 
     def Cluster_Plot_FIG(self):
         self.cluster_Plot, axes = plt.subplots(1, 2, figsize=(15, 5))
-        colours = ['tab:blue', 'tab:green', 'tab:red', 'tab:orange', 'tab:pink', 'tab:purple', 'tab:yellow', 'tab:cyan',
+        colours = ['tab:blue', 'tab:green', 'tab:red', 'tab:orange', 'tab:pink', 'tab:purple', 'tab:cyan',
                    'tab:magenta', ]
         bar_colours = []
         n = 0
@@ -876,6 +876,7 @@ class Fit_Spline_Calc:
     def Calc_Properties(self):
         splines_set = self.splines_set_final
         pca = self.setPCA
+        stripe_heights = [25,50,75,87]
 
         stripe_properties = {}
 
@@ -928,7 +929,7 @@ class Fit_Spline_Calc:
                         backCamber = np.mean(point_rot_matrix[0, backCamber_pos])
                         backCamber = (backCamber - draft_vector_rot_origin[0]) / (draft_vector_rot[0] - draft_vector_rot_origin[0])
 
-                        stripeStats.append([draft, camber[0, 0], frontCamber[0, 0], backCamber[0, 0], np.degrees(twist)])
+                        stripeStats.append([draft, camber[0, 0], frontCamber[0, 0], backCamber[0, 0], np.degrees(twist), stripe_heights[stripeNo] ])
 
                         rot_matrix_inv = np.transpose(rot_matrix)
                         plotAnnotations_rot = np.asmatrix(
@@ -956,6 +957,7 @@ class Export_Results:
         self.timeStamps = timeStamps
         exportDirectory, h5 = os.path.split(path_to_h5)
         exportPath = os.path.join(exportDirectory, "autScan_output")
+        blank, self.sail_name = os.path.split(exportPath)
         if not os.path.exists(exportPath):
             os.makedirs(exportPath)
         self.exportPath = exportPath
@@ -1004,7 +1006,7 @@ class Export_Results:
                          round(stripeStats[n][4],2))
                 vert_count += 1
 
-            fileName = str(pic)
+            fileName = str(self.sail_name)+str('_')+str(pic)
 
             for format in exportFormats:
                 if format == ".pdf":
@@ -1027,25 +1029,21 @@ class Export_Results:
             plt.clf()
 
     def Export_Data_CSV(self, stripe_properties, stripeCount):
-        column_labels = ['timeStamp', '25_draft', '25_camber', '25_frontCamber', '25_backCamber', '25_twist', '50_draft',
-                   '50_camber', '50_frontCamber', '50_backCamber', '50_twist', '75_draft', '75_camber',
-                   '75_frontCamber', '75_backCamber', '75_twist', '87_draft', '87_camber', '87_frontCamber',
-                   '87_backCamber', '87_twist',]
-        column_labels = column_labels[0:(5*stripeCount)+1]
         forDF = []
         for pic in list(stripe_properties.keys()):
-            vals = []
-            ts = self.timeStamps[pic]
-            decoded_string = ts.decode('utf-8')
-            dt_object = datetime.strptime(decoded_string, '%Y:%m:%d %H:%M:%S')
-            string_time = dt_object.strftime('%Y-%m-%d %H:%M:%S')
-            vals.append(string_time)
             for stripe in stripe_properties[pic][2]:
+                vals = []
+                ts = self.timeStamps[pic]
+                decoded_string = ts.decode('utf-8')
+                dt_object = datetime.strptime(decoded_string, '%Y:%m:%d %H:%M:%S')
+                string_time = dt_object.strftime('%Y-%m-%d %H:%M:%S')
+                vals.append(string_time)
                 for val in stripe:
                     vals.append(val)
-            forDF.append(vals)
+                forDF.append(vals)
+
         export_data = pd.DataFrame(forDF)
-        export_data.columns = column_labels
+        export_data.columns = ['timeStamp', 'draft', 'camber', 'frontCamber', 'backCamber', 'twist', 'Height']
         export_data.to_csv(os.path.join(self.exportPath, 'data.csv'), index=False)
 
     def Export_HyperParams(self, type, targetColour, norms, threshold_offset, threshold_calc,threshold_final,countClean_Min, countClean_Max,set_eps, set_min, set_clusterOffset, pic_eps, pic_min, numberStripes, h5_file):
