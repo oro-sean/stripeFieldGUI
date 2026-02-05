@@ -801,7 +801,6 @@ class Fit_Spline_Calc:
 
         splines_set = self.splines_set_link
 
-
         for n in range(len(splines_set.keys())):
             print('\n')
             pic = list(splines_set.keys())[n]
